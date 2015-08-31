@@ -5,4 +5,12 @@
 #ifndef FIRMWARE_WIFI_H
 #define FIRMWARE_WIFI_H
 
+namespace RVR
+{
+    class Wifi
+    {
+
+    };
+}
+
 #endif //FIRMWARE_WIFI_H
