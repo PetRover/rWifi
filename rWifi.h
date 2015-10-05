@@ -27,7 +27,8 @@ namespace RVR
         int createEndpoint();
         int initiateConnection();
         int terminateConnection();
-        int sendData(const void *message, int messageLength);
+        ssize_t sendData(const void *message, size_t messageLength);
+        ssize_t receiveData(void *receiveBuffer, size_t length)
     };
 
     class NetworkManager
@@ -39,7 +40,8 @@ namespace RVR
     public:
         void initializeNewConnection(std::string connectionName, std::string ipAddress);
         void terminateConnection(std::string connectionName);
-        void sendData(std::string connectionName, const void *message, int length);
+        void sendData(std::string connectionName, const void *message, size_t length);
+        void receiveData(std::string connectionName, void *receiveBuffer, size_t length);
     };
 }
 

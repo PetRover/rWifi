@@ -31,12 +31,23 @@ namespace RVR
         return;
     }
 
-    void NetworkManager::sendData(std::string connectionName, const void *message, int length) //TODO - determine type instead of void*
+    void NetworkManager::sendData(std::string connectionName, const void *message, size_t length) //TODO - determine type instead of void*
     {
         Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
         connectionPtr->sendData(message, length);
 
         return;
+        //TODO - check that the number of bytes sent is equal to the number of bytes i expect (length)
+    }
+
+    void NetworkManager::receiveData(std::string connectionName, void *receiveBuffer, size_t length)
+    //Received data will be stored in the buffer which is passed to us via the pointer receiveBuffer
+    {
+        Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
+        connectionPtr->receiveData(receiveBuffer, length);
+
+        return;
+        //TODO - check that the number of bytes returned is equal to the number of bytes I expect (length)
     }
 
     Connection* NetworkManager::getConnectionPtrByConnectionName(std::string connectionNameToFind)
@@ -137,12 +148,21 @@ namespace RVR
         return successStatus;
     }
 
-    int Connection::sendData(const void *message, int messageLength)
+    ssize_t Connection::sendData(const void *message, size_t messageLength)
     //Upon successful completion, send() shall return the number of bytes sent. Otherwise, -1 shall be returned
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
         int bytesSent = send(this->fileDescriptor, message, messageLength, 0);
         return bytesSent;
+    }
+
+    ssize_t Connection::receiveData(void *receiveBuffer, size_t length)
+    //Upon successful completion, recv() shall return the length of the message in bytes. If no messages are available to be
+    //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
+    //Last input argument for recv = 0 to indicate no flags
+    {
+        int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
+        return bytesReceived;
     }
 }
