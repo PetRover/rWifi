@@ -29,16 +29,16 @@ namespace RVR
         return;
     }
 
-    void NetworkManager::sendData(std::string connectionName, char *message) //TODO - determine type instead of void*
+    void NetworkManager::sendData(std::string connectionName, NetworkChunk *chunk) //TODO - determine type instead of void*
     {
         Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
-        connectionPtr->sendData(message);
+        connectionPtr->sendData(chunk);
 
         return;
         //TODO - check that the number of bytes sent is equal to the number of bytes i expect (length)
     }
 
-    void NetworkManager::receiveData(std::string connectionName, void *receiveBuffer, size_t length)
+    void NetworkManager::receiveData(std::string connectionName, void *receiveBuffer, int length)
     //Received data will be stored in the buffer which is passed to us via the pointer receiveBuffer
     {
         Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
@@ -137,18 +137,17 @@ namespace RVR
         return successStatus;
     }
 
-    ssize_t Connection::sendData(char *message)
+    int Connection::sendData(NetworkChunk *chunk)
     //Upon successful completion, send() shall return the number of bytes sent. Otherwise, -1 shall be returned
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
-        int bytesSent = send(this->fileDescriptor, message, sizeof(message), 0); //TODO - implement class so length is passed into this function.
-        printf("Tried to send %d bytes\n", sizeof(message));
+        int bytesSent = send(this->fileDescriptor, chunk->payload, chunk->numberBytes, 0);
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
     }
 
-    ssize_t Connection::receiveData(void *receiveBuffer, size_t length)
+    int Connection::receiveData(void *receiveBuffer, int length)
     //Upon successful completion, recv() shall return the length of the message in bytes. If no messages are available to be
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags

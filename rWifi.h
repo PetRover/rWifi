@@ -14,6 +14,15 @@
 
 namespace RVR
 {
+    class NetworkChunk
+    {
+    private:
+    public:
+        void* payload;
+        int numberBytes;
+        int dataTypeIndetifier;
+    };
+
     class Connection
         // A connection object represents one socket
     {
@@ -27,8 +36,8 @@ namespace RVR
         int createEndpoint();
         void initiateConnection();
         int terminateConnection();
-        ssize_t sendData(char *message);
-        ssize_t receiveData(void *receiveBuffer, size_t length);
+        int sendData(NetworkChunk *chunk);
+        int receiveData(void *receiveBuffer, int length);
     };
 
     class NetworkManager
@@ -40,8 +49,8 @@ namespace RVR
     public:
         void initializeNewConnection(std::string connectionName, const char* ipAddress);
         void terminateConnection(std::string connectionName);
-        void sendData(std::string connectionName, char *message);
-        void receiveData(std::string connectionName, void *receiveBuffer, size_t length);
+        void sendData(std::string connectionName, NetworkChunk *chunk);
+        void receiveData(std::string connectionName, void *receiveBuffer, int length);
     };
 }
 
