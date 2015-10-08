@@ -27,7 +27,7 @@ namespace RVR
         int createEndpoint();
         void initiateConnection();
         int terminateConnection();
-        ssize_t sendData(const void *message, size_t messageLength);
+        ssize_t sendData(char *message);
         ssize_t receiveData(void *receiveBuffer, size_t length);
     };
 
@@ -40,7 +40,7 @@ namespace RVR
     public:
         void initializeNewConnection(std::string connectionName, const char* ipAddress);
         void terminateConnection(std::string connectionName);
-        void sendData(std::string connectionName, const void *message, size_t length);
+        void sendData(std::string connectionName, char *message);
         void receiveData(std::string connectionName, void *receiveBuffer, size_t length);
     };
 }

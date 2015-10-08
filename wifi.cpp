@@ -3,8 +3,6 @@
 //
 #include "rWifi.h"
 
-#define IPV4_LENGTH 4
-
 namespace RVR
 {
 // ==============================================================
@@ -31,10 +29,10 @@ namespace RVR
         return;
     }
 
-    void NetworkManager::sendData(std::string connectionName, const void *message, size_t length) //TODO - determine type instead of void*
+    void NetworkManager::sendData(std::string connectionName, char *message) //TODO - determine type instead of void*
     {
         Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
-        connectionPtr->sendData(message, length);
+        connectionPtr->sendData(message);
 
         return;
         //TODO - check that the number of bytes sent is equal to the number of bytes i expect (length)
@@ -62,6 +60,7 @@ namespace RVR
         }
 
         //TODO -implement error if connectionName not found
+        return nullptr;
     }
 
     int NetworkManager::getPositionByConnectionName(std::string connectionNameToFind)
@@ -78,6 +77,7 @@ namespace RVR
         }
 
         //TODO -implement error if connectionName not found
+        return 0;
     }
 // ==============================================================
 // Connection Class Member functions
@@ -114,12 +114,9 @@ namespace RVR
     //Upon successful completion, connect() shall return 0; otherwise, -1 shall be returned
     {
         struct sockaddr_in socketAddress;
+        socketAddress.sin_addr.s_addr = inet_addr(this->ipAddress);
         socketAddress.sin_family = AF_INET;
         socketAddress.sin_port = htons(1024);
-        inet_aton(this->ipAddress, &socketAddress.sin_addr);
-
-        char *storedAddress = inet_ntoa(socketAddress.sin_addr); // return the IP
-        printf("Check - stored address is: %s\n", storedAddress);
 
         printf("Attempting to connect...\n");
         int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &socketAddress, sizeof(socketAddress));
@@ -140,12 +137,14 @@ namespace RVR
         return successStatus;
     }
 
-    ssize_t Connection::sendData(const void *message, size_t messageLength)
+    ssize_t Connection::sendData(char *message)
     //Upon successful completion, send() shall return the number of bytes sent. Otherwise, -1 shall be returned
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
-        int bytesSent = send(this->fileDescriptor, message, messageLength, 0);
+        int bytesSent = send(this->fileDescriptor, message, sizeof(message), 0); //TODO - implement class so length is passed into this function.
+        printf("Tried to send %d bytes\n", sizeof(message));
+        printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
     }
 
