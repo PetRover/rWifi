@@ -3,14 +3,14 @@
 //
 #include "rWifi.h"
 
-#define IPV4_LENGTH 12
+#define IPV4_LENGTH 4
 
 namespace RVR
 {
 // ==============================================================
 // Connection NetworkManager Member functions
 // ==============================================================
-    void NetworkManager::initializeNewConnection(std::string connectionName, std::string ipAddress)
+    void NetworkManager::initializeNewConnection(std::string connectionName, const char* ipAddress)
     {
         Connection* connectionPtr = new Connection;
 
@@ -83,12 +83,19 @@ namespace RVR
 // Connection Class Member functions
 // ==============================================================
 
-    void Connection::initializeNewSocket(std::string connectionName, std::string ipAddress)
+    void Connection::initializeNewSocket(std::string connectionName, const char* ipAddress)
     {
         this->ipAddress = ipAddress;
         this->connectionName = connectionName;
         this->fileDescriptor = this->createEndpoint();
 
+        if (fileDescriptor == -1)
+        {
+            printf("Failed to initialize new socket\n");
+        }else{
+            std::string errorMessage = "\nConnection name: " + this->connectionName + "\nIP Address: " + this->ipAddress + "\n\n";
+            printf("Successfully initiated new socket!\nFileDescriptor: %d %s", this->fileDescriptor, errorMessage.c_str());
+        }
         return;
     }
 
@@ -102,41 +109,26 @@ namespace RVR
         return fileDescriptor;
     }
 
-    int Connection::initiateConnection()
+    void Connection::initiateConnection()
     //Connects to a socket. Input parameter is the IP address to be formatted.
     //Upon successful completion, connect() shall return 0; otherwise, -1 shall be returned
     {
-        std::string ipAddressRaw = this->ipAddress;
-
-        //reverse string for easier parsing
-        for (int i = 0; i < ipAddressRaw.length(); i++)
-        {
-            ipAddress[i] = ipAddressRaw[ipAddressRaw.length()-1-i];
-        }
-
-        //parse IP address string into form used for connection
-        int digit = 0;
-        int byte = 0;
-        int IPByte[4] = {0};
-        for (int i=0; i<ipAddress.length(); ++i)
-        {
-            if (ipAddress[i] == '.')
-            {
-                digit = 0;
-                byte++;
-                continue;
-            }
-            IPByte[byte] = ipAddress[i]*10^digit;
-            digit++;
-        }
-
         struct sockaddr_in socketAddress;
         socketAddress.sin_family = AF_INET;
-        socketAddress.sin_port = 1024;
-        socketAddress.sin_addr.s_addr = (((((IPByte[0] << 8) | IPByte[1]) << 8) | IPByte[2]) << 8) | IPByte[3];
+        socketAddress.sin_port = htons(1024);
+        inet_aton(this->ipAddress, &socketAddress.sin_addr);
 
-        int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &socketAddress, IPV4_LENGTH);
-        return successStatus;
+        char *storedAddress = inet_ntoa(socketAddress.sin_addr); // return the IP
+        printf("Check - stored address is: %s\n", storedAddress);
+
+        printf("Attempting to connect...\n");
+        int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &socketAddress, sizeof(socketAddress));
+        if (successStatus == -1){
+            printf("Failed to initiate connection\n");
+        }else{
+            printf("Sucessfully initiated connection\n");
+        }
+        return;
     }
 
     int Connection::terminateConnection()

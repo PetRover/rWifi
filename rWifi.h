@@ -19,16 +19,16 @@ namespace RVR
     {
     private:
 
-        std::string ipAddress;
+        const char* ipAddress;
         int fileDescriptor;
     public:
         std::string connectionName;
-        void initializeNewSocket(std::string connectionName, std::string ipAddress);
+        void initializeNewSocket(std::string connectionName, const char* ipAddress);
         int createEndpoint();
-        int initiateConnection();
+        void initiateConnection();
         int terminateConnection();
         ssize_t sendData(const void *message, size_t messageLength);
-        ssize_t receiveData(void *receiveBuffer, size_t length)
+        ssize_t receiveData(void *receiveBuffer, size_t length);
     };
 
     class NetworkManager
@@ -38,7 +38,7 @@ namespace RVR
         Connection* getConnectionPtrByConnectionName(std::string connectionNameToFind);
         int getPositionByConnectionName(std::string connectionNameToFind);
     public:
-        void initializeNewConnection(std::string connectionName, std::string ipAddress);
+        void initializeNewConnection(std::string connectionName, const char* ipAddress);
         void terminateConnection(std::string connectionName);
         void sendData(std::string connectionName, const void *message, size_t length);
         void receiveData(std::string connectionName, void *receiveBuffer, size_t length);
