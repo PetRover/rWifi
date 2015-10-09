@@ -37,7 +37,7 @@ namespace RVR
         void initiateConnection();
         int terminateConnection();
         int sendData(NetworkChunk *chunk);
-        int receiveData(void *receiveBuffer, int length);
+        int receiveData(char *receiveBuffer, int length);
     };
 
     class NetworkManager
@@ -50,7 +50,7 @@ namespace RVR
         void initializeNewConnection(std::string connectionName, const char* ipAddress);
         void terminateConnection(std::string connectionName);
         void sendData(std::string connectionName, NetworkChunk *chunk);
-        void receiveData(std::string connectionName, void *receiveBuffer, int length);
+        int receiveData(std::string connectionName, char *receiveBuffer, int length);
     };
 }
 

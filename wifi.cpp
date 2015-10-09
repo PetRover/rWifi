@@ -38,13 +38,13 @@ namespace RVR
         //TODO - check that the number of bytes sent is equal to the number of bytes i expect (length)
     }
 
-    void NetworkManager::receiveData(std::string connectionName, void *receiveBuffer, int length)
+    int NetworkManager::receiveData(std::string connectionName, char *receiveBuffer, int length)
     //Received data will be stored in the buffer which is passed to us via the pointer receiveBuffer
     {
         Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
-        connectionPtr->receiveData(receiveBuffer, length);
+        int receivedBytes = connectionPtr->receiveData(receiveBuffer, length);
 
-        return;
+        return receivedBytes;
         //TODO - check that the number of bytes returned is equal to the number of bytes I expect (length)
     }
 
@@ -114,7 +114,8 @@ namespace RVR
     //Upon successful completion, connect() shall return 0; otherwise, -1 shall be returned
     {
         struct sockaddr_in socketAddress;
-        socketAddress.sin_addr.s_addr = inet_addr(this->ipAddress);
+   //     socketAddress.sin_addr.s_addr = inet_addr(this->ipAddress);
+        socketAddress.sin_addr.s_addr = inet_addr("192.168.7.1");
         socketAddress.sin_family = AF_INET;
         socketAddress.sin_port = htons(1024);
 
@@ -142,17 +143,18 @@ namespace RVR
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
-        int bytesSent = send(this->fileDescriptor, chunk->payload, chunk->numberBytes, 0);
+        ssize_t bytesSent = send(this->fileDescriptor, chunk->payload, chunk->numberBytes, 0);
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
     }
 
-    int Connection::receiveData(void *receiveBuffer, int length)
+    int Connection::receiveData(char *receiveBuffer, int length)
     //Upon successful completion, recv() shall return the length of the message in bytes. If no messages are available to be
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
         int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
+        printf("Received %d bytes\n", bytesReceived);
         return bytesReceived;
     }
 }
