@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <string>
 #include <vector>
+#include <queue>
 
 namespace RVR
 {
@@ -30,14 +31,16 @@ namespace RVR
 
         const char* ipAddress;
         int fileDescriptor;
+        std::queue<NetworkChunk*> chunkQueue;                 // empty queue
     public:
         std::string connectionName;
         void initializeNewSocket(std::string connectionName, const char* ipAddress);
         int createEndpoint();
         void initiateConnection();
         int terminateConnection();
+        int processData(NetworkChunk *chunk);
         int sendData(NetworkChunk *chunk);
-        int receiveData(char *receiveBuffer, int length);
+        int receiveDataFromBuffer(NetworkChunk *chunk);
     };
 
     class NetworkManager
@@ -50,7 +53,7 @@ namespace RVR
         void initializeNewConnection(std::string connectionName, const char* ipAddress);
         void terminateConnection(std::string connectionName);
         void sendData(std::string connectionName, NetworkChunk *chunk);
-        int receiveData(std::string connectionName, char *receiveBuffer, int length);
+        int getData(std::string connectionName, NetworkChunk *chunk);
     };
 }
 
