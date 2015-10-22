@@ -2,6 +2,7 @@
 // Created by Bryce Carter on 8/25/15.
 //
 #include "rWifi.h"
+#include "../rCore/easylogging++.h"
 
 #define RECEIVE_HEADER_LENGTH    2
 #define INTEGER                  6            //TODO - make these desired values not just convenient ones for testing
@@ -45,16 +46,14 @@ namespace RVR
         //TODO - check that the number of bytes sent is equal to the number of bytes i expect (length)
     }
 
-    int NetworkManager::getData(std::string connectionName, NetworkChunk *chunk)
-    //Received data will be stored in the buffer which is passed to us via the pointer chunk. Return value of 1 indicates
-    //there was data placed in this chunk. Return value of 0 indicates no data was available to fill this chunk.
+    NetworkChunk NetworkManager::getData(std::string connectionName)
+    //Received data will be passed back in return argument
     {
+        VLOG(1) << "Receiving data...";
         Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
-        int dataReceived = connectionPtr->processData(chunk);
+        NetworkChunk data = connectionPtr->processData();
 
-        printf("length = %d (i.e. was correct value passed back to getData function)\n",chunk->numberBytes);
-
-        return dataReceived;
+        return data;
     }
 
     Connection* NetworkManager::getConnectionPtrByConnectionName(std::string connectionNameToFind)
@@ -100,10 +99,9 @@ namespace RVR
 
         if (fileDescriptor == -1)
         {
-            printf("Failed to initialize new socket\n");
+            VLOG(2) << "Failed to initialize new socket";
         }else{
-            std::string errorMessage = "\nConnection name: " + this->connectionName + "\nIP Address: " + this->ipAddress + "\n\n";
-            printf("Successfully initiated new socket!\nFileDescriptor: %d %s", this->fileDescriptor, errorMessage.c_str());
+            VLOG(2) << "Successfully initiated new socket!\nFileDescriptor: " << this->fileDescriptor << "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddress <<"\n";
         }
         return;
     }
@@ -127,12 +125,12 @@ namespace RVR
         socketAddress.sin_family = AF_INET;
         socketAddress.sin_port = htons(1024);
 
-        printf("Attempting to connect...\n");
+        VLOG(1) << "Attempting to connect...";
         int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &socketAddress, sizeof(socketAddress));
         if (successStatus == -1){
-            printf("Failed to initiate connection\n");
+            VLOG(1) << "Failed to initiate connection";
         }else{
-            printf("Sucessfully initiated connection\n");
+            VLOG(1) << "Sucessfully initiated connection";
         }
         return;
     }
@@ -156,109 +154,95 @@ namespace RVR
         return bytesSent;
     }
 
-    int Connection::processData(NetworkChunk *oldestChunk)
+    NetworkChunk Connection::processData()
     //function takes everything that is on the buffer and puts it in a queue of NetworkChunk*'s. It then returns the oldest
     //to be processed
     {
         int bytesReceived;
+        int chunksReceived = 0;
 
-        //TODO - make sure it can't hang here for too long if there's an incredible amount of stuff on buffer
         do{//while there is data to be received in the buffer
             NetworkChunk* receivedChunk = new NetworkChunk; //create a chunk
-            bytesReceived = this->receiveDataFromBuffer(receivedChunk);//try to fill it from the buffer
-            printf("Data is being received off buffer...\n");
+            bytesReceived = this->receiveDataFromBuffer(&receivedChunk);//try to fill it from the buffer
+            VLOG(2) << "Data is being received off buffer...";
+
 
             if(bytesReceived > 0){ //if something was received, store it into the queue
-                printf("Data received off buffer and being pushed into queue\n");
+                VLOG(2) << "Data being pushed into queue";
                 this->chunkQueue.push (receivedChunk);
-                printf("length = %d (i.e. was correct number passed back to processData function and pushed into queue)\n", receivedChunk->numberBytes);
             }
             else {//buffer was empty - nothing was received
-                printf("No data received off buffer to push into queue\n");
+                VLOG(2) << "No data to push into queue";
                 bytesReceived = 0;
             }
-        }while(bytesReceived > 0);
+            chunksReceived++;
+        }while(bytesReceived > 0 & chunksReceived < 3);
 
         if (!this->chunkQueue.empty())//if there's something in the queue (it's not empty)
         {
-            printf("Data in queue, popping data to process\n");
+            NetworkChunk *oldestChunk;
+            VLOG(2) << "Popping data out of queue";
             oldestChunk = this->chunkQueue.front();    //access the oldest chunk in the queue
-            printf("length = %d (i.e. correct number popped off queue)\n",oldestChunk->numberBytes);
             this->chunkQueue.pop();//delete the oldest chunk from the queue
-            return 1; //indicating data has taken off queue and returned
+            return *oldestChunk;
         } else{
-            printf("No data in queue to pop\n");
-            return 0; //indicating queue was empty and no data was returned
+            VLOG(2) << "No data in queue to pop";
+            //TODO - what to return here?
         }
     }
 
-    int Connection::receiveDataFromBuffer(NetworkChunk *chunk)
+    int Connection::checkReceivedDataHeader(char* header)
+    {
+        VLOG(2) << "Checking data header...";
+        for (int i=0;i<(RECEIVE_HEADER_LENGTH-1);i++)//minus 1 because last byte is the one carrying length/type info
+        {
+            if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
+            {
+                VLOG(2) << "Incorrect data header";
+                return 0;
+            }
+        }
+        VLOG(2) << "Correct data header";
+        return 1;
+    }
+
+    int Connection::receiveDataFromBuffer(NetworkChunk **chunk)
     //Upon successful completion, recv() shall return the length of the message in bytes. If no messages are available to be
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
         char header[RECEIVE_HEADER_LENGTH];
-        int length;
-        int dataType;
 
-        //Receive starter byte
-        int starterBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH, 0);
+        int headerBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH, 0);         //Receive starter byte
 
-        if (starterBytesReceived == RECEIVE_HEADER_LENGTH){ //if correct number of bytes for header were received
-            //check that the header we received = header expected
-            printf("Header received. Received %d bytes\n", starterBytesReceived);
-            int correctHeader = 1;
-            for (int i=0;i<(RECEIVE_HEADER_LENGTH-1);i++)//minus 1 because last byte is the one carrying lenght/type info
-            {
-                printf("Header byte: %d\n", header[i]);
-                if(header[i] != receiveHeaderValue[i])
-                {
-                    printf("Incorrect header byte\n");
-                    correctHeader = 0;
-                }
-            }
-            if (correctHeader){
-                printf("Received the correct header!\n");
-                printf("Datatype/length byte is: %d\n", header[RECEIVE_HEADER_LENGTH-1]);
-                dataType = header[RECEIVE_HEADER_LENGTH-1] >> 4; //data type info stored in first half of info carrying byte
-                length = header[RECEIVE_HEADER_LENGTH-1] & 0x0f; //length info stored in second half of info carrying byte
-                printf("data type indicated is: %d\n", dataType);
-                printf("Length = %d (i.e. length indicated by Datatype/length byte)\n", length);
+        if (headerBytesReceived == RECEIVE_HEADER_LENGTH){ //if correct number of bytes for header were received
+            if(this->checkReceivedDataHeader(header)){
 
-                //receive data of indicated length
-                //must be if statements, not switch/case because of scoping issues
+                int dataType = header[RECEIVE_HEADER_LENGTH-1] >> 4; //data type info stored in first half of info carrying byte
+                int length = header[RECEIVE_HEADER_LENGTH-1] & 0x0f; //length info stored in second half of info carrying byte
+
+                VLOG(2) << "Header indicates length: " << length;
+
+                //receive data of indicated length - must be if statements, not switch/case because of scoping issues
                 if (dataType == INTEGER){
-//                    printf("Data Type = integer\n");
+                    VLOG(2) << "Header indicates datatype: integer" ;
                     int receiveBuffer[length];
                     int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
-                    printf("length = %d (i.e. actual number received)\n", bytesReceived);
 
-                    chunk->numberBytes = bytesReceived;
-                    chunk->dataTypeIndetifier = dataType;
-                    chunk->payload = receiveBuffer;
+                    (*chunk)->numberBytes = bytesReceived;
+                    (*chunk)->dataTypeIndetifier = dataType;
+                    (*chunk)->payload = receiveBuffer;
 
-                    printf("length = %d (i.e. was correct number stored?)\n", chunk->numberBytes);
-                    return bytesReceived;
-                }
-                else if(dataType == CHARACTER){
-                    printf("Data Type = character\n");
-                    char receiveBuffer[length];
-                    int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
-                    printf("Received %d bytes\n", bytesReceived);
-
-                    chunk->numberBytes = bytesReceived;
-                    chunk->dataTypeIndetifier = dataType;
-                    chunk->payload = receiveBuffer;
-
-                    printf("Pushing length %d\n", chunk->numberBytes);
                     return bytesReceived;
                 }
             }else{
+                VLOG(2) << "Received data has incorrect header";
                 return 0;//correct header not returned
                 //TODO - enter mode where keep looking for next starter byte
             }
         }else{//not even a header was received off buffer
-            return 0; //no bytes received
+            VLOG(1) << "No data received";
+            return 0;
         }
     }
 

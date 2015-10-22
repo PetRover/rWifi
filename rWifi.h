@@ -38,9 +38,10 @@ namespace RVR
         int createEndpoint();
         void initiateConnection();
         int terminateConnection();
-        int processData(NetworkChunk *chunk);
+        NetworkChunk processData();
         int sendData(NetworkChunk *chunk);
-        int receiveDataFromBuffer(NetworkChunk *chunk);
+        int receiveDataFromBuffer(NetworkChunk **chunk);
+        int checkReceivedDataHeader(char* header);
     };
 
     class NetworkManager
@@ -53,7 +54,7 @@ namespace RVR
         void initializeNewConnection(std::string connectionName, const char* ipAddress);
         void terminateConnection(std::string connectionName);
         void sendData(std::string connectionName, NetworkChunk *chunk);
-        int getData(std::string connectionName, NetworkChunk *chunk);
+        NetworkChunk getData(std::string connectionName);
     };
 }
 
