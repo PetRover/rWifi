@@ -5,8 +5,8 @@
 #include "../rCore/easylogging++.h"
 
 #define RECEIVE_HEADER_LENGTH    2
-#define INTEGER                  6            //TODO - make these desired values not just convenient ones for testing
-#define CHARACTER                7
+#define INTEGER                  7            //TODO - make these desired values not just convenient ones for testing
+#define CHARACTER                6
 
 
 int receiveHeaderValue[RECEIVE_HEADER_LENGTH-1] = {52};          //minus 1 becuase last byte is information carrying byte
@@ -198,7 +198,6 @@ namespace RVR
             bytesReceived = this->receiveDataFromBuffer(&receivedChunk);//try to fill it from the buffer
             VLOG(2) << "Data is being received off buffer...";
 
-
             if(bytesReceived > 0){ //if something was received, store it into the queue
                 VLOG(2) << "Data being pushed into queue";
                 this->chunkQueue.push (receivedChunk);
@@ -208,7 +207,7 @@ namespace RVR
                 bytesReceived = 0;
             }
             chunksReceived++;
-        }while(bytesReceived > 0 & chunksReceived < 3);
+        }while(bytesReceived > 0 & chunksReceived < 1);
 
         if (!this->chunkQueue.empty())//if there's something in the queue (it's not empty)
         {
@@ -256,14 +255,14 @@ namespace RVR
                 VLOG(2) << "Header indicates length: " << length;
 
                 //receive data of indicated length - must be if statements, not switch/case because of scoping issues
-                if (dataType == INTEGER){
-                    VLOG(2) << "Header indicates datatype: integer" ;
-                    int receiveBuffer[length];
+                if (dataType == CHARACTER){
+                    VLOG(2) << "Header indicates datatype: character" ;
+                    char* receiveBuffer = new char[length];
                     int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
-
                     (*chunk)->setNumberBytes(bytesReceived);
                     (*chunk)->setDataTypeIdentifier(dataType);
-                    (*chunk)->setPayload(receiveBuffer);
+                    (*chunk)->setPayload(receiveBuffer); //this is totally getting deleted outside the scope of this function i bet
+                    //in this case, the setter makes sure we maintain the value of the pointer, but the data still gets deleted!
 
                     return bytesReceived;
                 }
