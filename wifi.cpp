@@ -14,6 +14,38 @@ int receiveHeaderValue[RECEIVE_HEADER_LENGTH-1] = {52};          //minus 1 becua
 namespace RVR
 {
 // ==============================================================
+// NetworkChunk Member functions
+// ==============================================================
+    void NetworkChunk::setPayload(void * payloadToSet)
+    {
+        this->payload = payloadToSet;
+    }
+
+    void NetworkChunk::setNumberBytes(int numberBytesToSet)
+    {
+        this->numberBytes = numberBytesToSet;
+    }
+
+    void NetworkChunk::setDataTypeIdentifier(int dataTypeIdentifierToSet)
+    {
+        this->dataTypeIndetifier = dataTypeIdentifierToSet;
+    }
+
+    int NetworkChunk::getNumberBytes()
+    {
+        return this->numberBytes;
+    }
+
+    int NetworkChunk::getDataTypeIdentifier()
+    {
+        return this->dataTypeIndetifier;
+    }
+
+    void*  NetworkChunk::getPayload()
+    {
+        return this->payload;
+    }
+// ==============================================================
 // Connection NetworkManager Member functions
 // ==============================================================
     void NetworkManager::initializeNewConnection(std::string connectionName, const char* ipAddress)
@@ -149,7 +181,7 @@ namespace RVR
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
-        ssize_t bytesSent = send(this->fileDescriptor, chunk->payload, chunk->numberBytes, 0);
+        ssize_t bytesSent = send(this->fileDescriptor, chunk->getPayload(), chunk->getNumberBytes(), 0);
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
     }
@@ -229,9 +261,9 @@ namespace RVR
                     int receiveBuffer[length];
                     int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
 
-                    (*chunk)->numberBytes = bytesReceived;
-                    (*chunk)->dataTypeIndetifier = dataType;
-                    (*chunk)->payload = receiveBuffer;
+                    (*chunk)->setNumberBytes(bytesReceived);
+                    (*chunk)->setDataTypeIdentifier(dataType);
+                    (*chunk)->setPayload(receiveBuffer);
 
                     return bytesReceived;
                 }

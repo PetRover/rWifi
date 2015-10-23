@@ -18,17 +18,22 @@ namespace RVR
     class NetworkChunk
     {
     private:
-    public:
         void* payload;
         int numberBytes;
         int dataTypeIndetifier;
+    public:
+        void setPayload(void * payload);
+        void setNumberBytes(int numberBytes);
+        void setDataTypeIdentifier(int dataTypeIdentifier);
+        int getNumberBytes();
+        int getDataTypeIdentifier();
+        void* getPayload();
     };
 
     class Connection
         // A connection object represents one socket
     {
     private:
-
         const char* ipAddress;
         int fileDescriptor;
         std::queue<NetworkChunk*> chunkQueue;                 // empty queue
