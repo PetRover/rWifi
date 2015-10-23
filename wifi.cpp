@@ -254,18 +254,14 @@ namespace RVR
 
                 VLOG(2) << "Header indicates length: " << length;
 
-                //receive data of indicated length - must be if statements, not switch/case because of scoping issues
-                if (dataType == CHARACTER){
-                    VLOG(2) << "Header indicates datatype: character" ;
-                    char* receiveBuffer = new char[length];
-                    int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
-                    (*chunk)->setNumberBytes(bytesReceived);
-                    (*chunk)->setDataTypeIdentifier(dataType);
-                    (*chunk)->setPayload(receiveBuffer); //this is totally getting deleted outside the scope of this function i bet
-                    //in this case, the setter makes sure we maintain the value of the pointer, but the data still gets deleted!
+                //receive data of indicated length
+                char* receiveBuffer = new char[length];
+                int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
+                (*chunk)->setNumberBytes(bytesReceived);
+                (*chunk)->setDataTypeIdentifier(dataType);
+                (*chunk)->setPayload(receiveBuffer);
 
-                    return bytesReceived;
-                }
+                return bytesReceived;
             }else{
                 VLOG(2) << "Received data has incorrect header";
                 return 0;//correct header not returned
