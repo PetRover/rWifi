@@ -31,13 +31,15 @@ namespace RVR
     //This enum holds the list of different commands that Rover can execute
     {
         DRIVE_FORWARD,
-        DRIVE_BACKWARD = 77 //TODO - this is random. just for testing
+        DRIVE_BACKWARD, //TODO - this is random. just for testing
+        DRIVE_LEFT = 77
     };
 
     enum class StatusType
     //This enum holds the list of different pieces of information. This information does not require anything be executed
     {
-        CHARGING = 77 //TODO - this is random. just for testing
+        CHARGING = 77, //TODO - this is random. just for testing
+        NOT_CHARGING
     };
 
     class NetworkChunk

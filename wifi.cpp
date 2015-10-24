@@ -79,10 +79,10 @@ namespace RVR
     {
         NetworkChunk* newNetworkChunk = new NetworkChunk;
 
-        newNetworkChunk->setLength(COMMAND_LENGTH);
+        newNetworkChunk->setLength(COMMAND_LENGTH+1); //TODO - determine if desirable way to set length
         newNetworkChunk->setDataType(DataType::COMMAND);
 
-        char dataToSend[5]; //TODO - currently 4+1 byte for info. Adjust
+        char* dataToSend = new char[COMMAND_LENGTH+1]; //TODO - Adjust for appropriate length if not 4
         dataToSend[0] = (static_cast<int>(this->getCommandType()) << 4) & COMMAND_LENGTH; //first 4 bits are command type. last 4 are length
         dataToSend[1] = (this->getCommandData())[0];
         dataToSend[2] = (this->getCommandData())[1];
@@ -126,10 +126,10 @@ namespace RVR
     {
         NetworkChunk* newNetworkChunk = new NetworkChunk;
 
-        newNetworkChunk->setLength(STATUS_LENGTH);
+        newNetworkChunk->setLength(STATUS_LENGTH+1);//TODO - determine if desirable way to set length
         newNetworkChunk->setDataType(DataType::STATUS);
 
-        char dataToSend[5]; //TODO - currently 4+1 byte for info. Adjust
+        char* dataToSend = new char[STATUS_LENGTH+1]; //TODO - Adjust for appropriate length if not 4
         dataToSend[0] = (static_cast<int>(this->getStatusType()) << 4) & STATUS_LENGTH; //first 4 bits are command type. last 4 are length
         dataToSend[1] = (this->getStatusData())[0];
         dataToSend[2] = (this->getStatusData())[1];
@@ -385,9 +385,6 @@ namespace RVR
         if (headerBytesReceived == RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH){ //if correct number of bytes for header were received
             if(this->checkReceivedDataHeader(header)){
                 DataType dataType = static_cast<DataType>(header[RECEIVE_HEADER_LENGTH] >> 4);//typecast into dataType
-//                int length = header[RECEIVE_HEADER_LENGTH] & 0x0f; //TODO - make this at least 12 bits not 4
-
-//                VLOG(2) << "Length would have been... " <<(((header[RECEIVE_HEADER_LENGTH] & 0x0f) << 8) | header[RECEIVE_HEADER_LENGTH + 1]);
                 int length = (((header[RECEIVE_HEADER_LENGTH] & 0x0f) << 8) | header[RECEIVE_HEADER_LENGTH + 1]);
                 VLOG(2) << "Length is " << length;
                 char *receiveBuffer = new char[length];
