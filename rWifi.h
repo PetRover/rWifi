@@ -18,27 +18,30 @@ namespace RVR
     const int COMMAND_LENGTH = 4;
     const int STATUS_LENGTH = 4;
 
+
     enum class DataType
     //This enum holds the possible types of messages that can be sent. Each of these will be interpretted differently
     {
-        COMMAND = 6,
-        STATUS = 7,
+        COMMAND,
+        STATUS,
         CAMERA,
-        TEXT = 5
+        TEXT,
+        NONE
     };
+
 
     enum class CommandType
     //This enum holds the list of different commands that Rover can execute
     {
         DRIVE_FORWARD,
-        DRIVE_BACKWARD, //TODO - this is random. just for testing
-        DRIVE_LEFT = 77
+        DRIVE_BACKWARD,
+        DRIVE_LEFT
     };
 
     enum class StatusType
     //This enum holds the list of different pieces of information. This information does not require anything be executed
     {
-        CHARGING = 77, //TODO - this is random. just for testing
+        CHARGING,
         NOT_CHARGING
     };
 
@@ -49,6 +52,8 @@ namespace RVR
         char* data;
         int length;
     public:
+        NetworkChunk() { }
+        NetworkChunk(DataType dataTypeToSet, int lengthToSet, char* dataToSet);
         void setDataType(DataType dataTypeToSet);
         void setData(char* dataToSet);
         void setLength(int lengthToSet);
@@ -56,6 +61,9 @@ namespace RVR
         char* getData();
         int getLength();
     };
+
+//    NetworkChunk NULL_CHUNK = NetworkChunk(DataType::NONE, 0, nullptr);
+
 
     class Command
     {
@@ -122,6 +130,9 @@ namespace RVR
         int sendData(NetworkChunk *chunk);
         int receiveDataFromBuffer(NetworkChunk **chunk);
         int checkReceivedDataHeader(char* header);
+        int scanToFindCorrectHeader(NetworkChunk **receivedChunk, char* header);
+        int processReceivedData(NetworkChunk **receivedChunk, char* header);
+
     };
 
     class NetworkManager

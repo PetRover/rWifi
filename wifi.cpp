@@ -7,7 +7,6 @@
 #define RECEIVE_HEADER_LENGTH        1
 #define RECEIVE_TYPELENGTH_LENGTH    2
 
-//int receiveHeaderValue[RECEIVE_HEADER_LENGTH-1] = {52};          //minus 1 becuase last byte is information carrying byte
 int receiveHeaderValue[] = {52};
 
 namespace RVR
@@ -73,6 +72,8 @@ namespace RVR
     {
         this->commandType = static_cast<CommandType>((networkChunk.getData())[0]);
         this->commandData = networkChunk.getData()+1; //should be one byte after where the commandType was located
+
+        VLOG(2) << "Creating Command: Type = " << (int)(networkChunk.getData())[0] << ", Data = " << (int)this->commandData[0] << " " << (int)this->commandData[1] << " " << (int)this->commandData[2] << " " << (int)this->commandData[3];
     }
 
     NetworkChunk Command::toNetworkChunk()
@@ -120,6 +121,8 @@ namespace RVR
     {
         this->statusType = static_cast<StatusType>((networkChunk.getData())[0]);
         this->statusData = networkChunk.getData()+1; //should be one byte after where the commandType was located
+
+        VLOG(2) << "Creating Status: Type = " << (int)(networkChunk.getData())[0] << ", Data = " << (int)this->statusData[0] << " " << (int)this->statusData[1] << " " << (int)this->statusData[2] << " " << (int)this->statusData[3];
     }
 
     NetworkChunk Status::toNetworkChunk()
@@ -235,14 +238,13 @@ namespace RVR
             }
         }
 
-        //TODO -implement error if connectionName not found
         return nullptr;
     }
 
     int NetworkManager::getPositionByConnectionName(std::string connectionNameToFind)
     //Used for deleting connection
     {
-        int count = 0; //TODO - fix this dumb solution
+        int count = 0;
         for (std::vector<Connection*>::iterator it = this->existingConnections.begin() ; it != this->existingConnections.end(); ++it)
         {
             if ((*it)->connectionName == connectionNameToFind)
@@ -252,8 +254,14 @@ namespace RVR
             count++;
         }
 
-        //TODO -implement error if connectionName not found
         return 0;
+    }
+
+    NetworkChunk::NetworkChunk(DataType dataTypeToSet, int lengthToSet, char* dataToSet)
+    {
+        this->dataType = dataTypeToSet;
+        this->length = lengthToSet;
+        this->data = dataToSet;
     }
 // ==============================================================
 // Connection Class Member functions
@@ -335,7 +343,6 @@ namespace RVR
             bytesReceived = this->receiveDataFromBuffer(&receivedChunk);//try to fill it from the buffer
 
             if(bytesReceived > 0){ //if something was received, store it into the queue
-                VLOG(2) << "Data being pushed into queue";
                 this->chunkQueue.push (receivedChunk);
             }
             else {//buffer was empty - nothing was received
@@ -348,19 +355,17 @@ namespace RVR
         if (!this->chunkQueue.empty())//if there's something in the queue (it's not empty)
         {
             NetworkChunk *oldestChunk;
-            VLOG(2) << "Popping data out of queue";
             oldestChunk = this->chunkQueue.front();    //access the oldest chunk in the queue
             this->chunkQueue.pop();//delete the oldest chunk from the queue
             return *oldestChunk;
         } else{
             VLOG(2) << "No data in queue to pop";
-            //TODO - what to return here?
+//            return NULL_CHUNK; //TODO - whatever is processing data must be looking for this.
         }
     }
 
     int Connection::checkReceivedDataHeader(char* header)
     {
-        VLOG(2) << "Checking data header...";
         for (int i=0;i<(RECEIVE_HEADER_LENGTH);i++)//minus 1 because last byte is the one carrying length/type info
         {
             if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
@@ -378,33 +383,65 @@ namespace RVR
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
-        char header[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH];
+//        char header[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH];
+        char* header = new char[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH];
 
         int headerBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH, 0);         //Receive starter byte
 
         if (headerBytesReceived == RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH){ //if correct number of bytes for header were received
             if(this->checkReceivedDataHeader(header)){
-                DataType dataType = static_cast<DataType>(header[RECEIVE_HEADER_LENGTH] >> 4);//typecast into dataType
-                int length = (((header[RECEIVE_HEADER_LENGTH] & 0x0f) << 8) | header[RECEIVE_HEADER_LENGTH + 1]);
-                VLOG(2) << "Length is " << length;
-                char *receiveBuffer = new char[length];
-                int bytesReceived = 0;
-
-                bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
-
-                (*receivedChunk)->setDataType(dataType);
-                (*receivedChunk)->setLength(length);
-                (*receivedChunk)->setData(receiveBuffer);
+                int bytesReceived = this->processReceivedData(receivedChunk, header);
                 return bytesReceived;
             }else{
                 VLOG(2) << "Received data has incorrect header";
-                return 0;//correct header not returned
+                int bytesReceivedTakeTwo = this->scanToFindCorrectHeader(receivedChunk, header);
+                return bytesReceivedTakeTwo;//correct header not returned
                 //TODO - enter mode where keep looking for next starter byte
             }
         }else{//not even a header was received off buffer
             VLOG(1) << "No data received";
             return 0;
         }
+    }
+
+    int Connection::processReceivedData(NetworkChunk **receivedChunk, char* header)
+    {
+        DataType dataType = static_cast<DataType>(header[RECEIVE_HEADER_LENGTH] >> 4);//typecast into dataType
+        int length = (((header[RECEIVE_HEADER_LENGTH] & 0x0f) << 8) | header[RECEIVE_HEADER_LENGTH + 1]);
+        VLOG(2) << "Length is " << length;
+        char *receiveBuffer = new char[length];
+        int bytesReceived = 0;
+
+        bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
+
+        (*receivedChunk)->setDataType(dataType);
+        (*receivedChunk)->setLength(length);
+        (*receivedChunk)->setData(receiveBuffer);
+        return bytesReceived;
+    }
+
+    int Connection::scanToFindCorrectHeader(NetworkChunk **receivedChunk, char* header)
+    {
+        VLOG(2) << "Starting search for correct header because we are so lost...";
+        char *receiveBuffer = new char[1];
+
+        for (int waitCount = 0; waitCount < 100; waitCount++) //how many bytes we check for the header
+        {
+            VLOG(2) << "Attempt " << waitCount << " to find header";
+            recv(this->fileDescriptor, receiveBuffer, 1, 0); //receive 1 byte
+            if (receiveBuffer[0] == 52)
+            {
+                VLOG(2) << "The header has been found!";
+                header[0] = 52;
+                recv(this->fileDescriptor, receiveBuffer, RECEIVE_TYPELENGTH_LENGTH, 0); //receive 1 byte
+                for (int j = 0; j < RECEIVE_TYPELENGTH_LENGTH; j++){
+                    header[j+1] = receiveBuffer[j];
+                }
+                int bytesReceived = this->processReceivedData(receivedChunk,header);
+                return bytesReceived;
+            }
+        }
+    return 0;
     }
 
 }
