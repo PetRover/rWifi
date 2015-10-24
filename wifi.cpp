@@ -4,47 +4,183 @@
 #include "rWifi.h"
 #include "../rCore/easylogging++.h"
 
-#define RECEIVE_HEADER_LENGTH    2
-#define INTEGER                  7            //TODO - make these desired values not just convenient ones for testing
-#define CHARACTER                6
+#define RECEIVE_HEADER_LENGTH        1
+#define RECEIVE_TYPELENGTH_LENGTH    2
 
-
-int receiveHeaderValue[RECEIVE_HEADER_LENGTH-1] = {52};          //minus 1 becuase last byte is information carrying byte
+//int receiveHeaderValue[RECEIVE_HEADER_LENGTH-1] = {52};          //minus 1 becuase last byte is information carrying byte
+int receiveHeaderValue[] = {52};
 
 namespace RVR
 {
 // ==============================================================
 // NetworkChunk Member functions
 // ==============================================================
-    void NetworkChunk::setPayload(void * payloadToSet)
+    void NetworkChunk::setDataType(DataType dataTypeToSet)
     {
-        this->payload = payloadToSet;
+        this->dataType = dataTypeToSet;
     }
 
-    void NetworkChunk::setNumberBytes(int numberBytesToSet)
+    void NetworkChunk::setData(char* dataToSet)
     {
-        this->numberBytes = numberBytesToSet;
+        this->data = dataToSet;
     }
 
-    void NetworkChunk::setDataTypeIdentifier(int dataTypeIdentifierToSet)
+    void NetworkChunk::setLength(int lengthToSet)
     {
-        this->dataTypeIndetifier = dataTypeIdentifierToSet;
+        this->length = lengthToSet;
     }
 
-    int NetworkChunk::getNumberBytes()
+    DataType NetworkChunk::getDataType()
     {
-        return this->numberBytes;
+        return this->dataType;
     }
 
-    int NetworkChunk::getDataTypeIdentifier()
+    char* NetworkChunk::getData()
     {
-        return this->dataTypeIndetifier;
+        return this->data;
     }
 
-    void*  NetworkChunk::getPayload()
+    int NetworkChunk::getLength()
     {
-        return this->payload;
+        return this->length;
     }
+
+// ==============================================================
+// Command Member functions
+// ==============================================================
+    void Command::setCommandType(CommandType commandTypeToSet)
+    {
+        this->commandType = commandTypeToSet;
+    }
+
+    void Command::setCommandData(char* commandDataToSet){
+        this->commandData = commandDataToSet;
+    }
+
+    CommandType Command::getCommandType()
+    {
+        return this->commandType;
+    }
+
+    char* Command::getCommandData()
+    {
+        return this->commandData;
+    }
+
+    Command::Command(NetworkChunk networkChunk)
+    //This is the constructor. It takes a networkChunk and turns it into a command
+    //First byte of data is the command type - data starts after that byte
+    {
+        this->commandType = static_cast<CommandType>((networkChunk.getData())[0]);
+        this->commandData = networkChunk.getData()+1; //should be one byte after where the commandType was located
+    }
+
+    NetworkChunk Command::toNetworkChunk()
+    {
+        NetworkChunk* newNetworkChunk = new NetworkChunk;
+
+        newNetworkChunk->setLength(COMMAND_LENGTH);
+        newNetworkChunk->setDataType(DataType::COMMAND);
+
+        char dataToSend[5]; //TODO - currently 4+1 byte for info. Adjust
+        dataToSend[0] = (static_cast<int>(this->getCommandType()) << 4) & COMMAND_LENGTH; //first 4 bits are command type. last 4 are length
+        dataToSend[1] = (this->getCommandData())[0];
+        dataToSend[2] = (this->getCommandData())[1];
+        dataToSend[3] = (this->getCommandData())[2];
+        dataToSend[4] = (this->getCommandData())[3];
+        newNetworkChunk->setData(dataToSend);
+
+        return *newNetworkChunk;
+    }
+
+// ==============================================================
+// Status Member functions
+// ==============================================================
+    void Status::setStatusType(StatusType statusTypeToSet)
+    {
+        this->statusType = statusTypeToSet;
+    }
+
+    void Status::setStatusData(char* statusDataToSet)
+    {
+        this->statusData = statusDataToSet;
+    }
+
+    StatusType Status::getStatusType()
+    {
+        return this->statusType;
+    }
+
+    char* Status::getStatusData()
+    {
+        return this->statusData;
+    }
+
+    Status::Status(NetworkChunk networkChunk)
+    {
+        this->statusType = static_cast<StatusType>((networkChunk.getData())[0]);
+        this->statusData = networkChunk.getData()+1; //should be one byte after where the commandType was located
+    }
+
+    NetworkChunk Status::toNetworkChunk()
+    {
+        NetworkChunk* newNetworkChunk = new NetworkChunk;
+
+        newNetworkChunk->setLength(STATUS_LENGTH);
+        newNetworkChunk->setDataType(DataType::STATUS);
+
+        char dataToSend[5]; //TODO - currently 4+1 byte for info. Adjust
+        dataToSend[0] = (static_cast<int>(this->getStatusType()) << 4) & STATUS_LENGTH; //first 4 bits are command type. last 4 are length
+        dataToSend[1] = (this->getStatusData())[0];
+        dataToSend[2] = (this->getStatusData())[1];
+        dataToSend[3] = (this->getStatusData())[2];
+        dataToSend[4] = (this->getStatusData())[3];
+        newNetworkChunk->setData(dataToSend);
+
+        return *newNetworkChunk;
+    }
+
+
+// ==============================================================
+// Text Member functions
+// ==============================================================
+    void Text::setLength(int lengthToSet)
+    {
+        this->length = lengthToSet;
+    }
+
+    void Text::setTextMessage(char* textMessageToSet)
+    {
+        this->textMessage = textMessageToSet;
+    }
+
+    int Text::getLength()
+    {
+        return this->length;
+    }
+
+    char* Text::getTextMessage()
+    {
+        return this->textMessage;
+    }
+
+    Text::Text(NetworkChunk networkChunk)
+    {
+        this->length = networkChunk.getLength();
+        this->textMessage = networkChunk.getData();
+    }
+
+    NetworkChunk Text::toNetworkChunk()
+    {
+        NetworkChunk* newNetworkChunk = new NetworkChunk;
+
+        newNetworkChunk->setLength(this->length); //Equal to the length stored in the Text object
+        newNetworkChunk->setDataType(DataType::TEXT);
+        newNetworkChunk->setData(this->textMessage);
+
+        return *newNetworkChunk;
+    }
+
 // ==============================================================
 // Connection NetworkManager Member functions
 // ==============================================================
@@ -181,7 +317,7 @@ namespace RVR
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
-        ssize_t bytesSent = send(this->fileDescriptor, chunk->getPayload(), chunk->getNumberBytes(), 0);
+        ssize_t bytesSent = send(this->fileDescriptor, chunk->getData(), chunk->getLength(), 0);
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
     }
@@ -195,8 +331,8 @@ namespace RVR
 
         do{//while there is data to be received in the buffer
             NetworkChunk* receivedChunk = new NetworkChunk; //create a chunk
-            bytesReceived = this->receiveDataFromBuffer(&receivedChunk);//try to fill it from the buffer
             VLOG(2) << "Data is being received off buffer...";
+            bytesReceived = this->receiveDataFromBuffer(&receivedChunk);//try to fill it from the buffer
 
             if(bytesReceived > 0){ //if something was received, store it into the queue
                 VLOG(2) << "Data being pushed into queue";
@@ -225,7 +361,7 @@ namespace RVR
     int Connection::checkReceivedDataHeader(char* header)
     {
         VLOG(2) << "Checking data header...";
-        for (int i=0;i<(RECEIVE_HEADER_LENGTH-1);i++)//minus 1 because last byte is the one carrying length/type info
+        for (int i=0;i<(RECEIVE_HEADER_LENGTH);i++)//minus 1 because last byte is the one carrying length/type info
         {
             if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
             {
@@ -237,30 +373,31 @@ namespace RVR
         return 1;
     }
 
-    int Connection::receiveDataFromBuffer(NetworkChunk **chunk)
+    int Connection::receiveDataFromBuffer(NetworkChunk **receivedChunk)
     //Upon successful completion, recv() shall return the length of the message in bytes. If no messages are available to be
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
-        char header[RECEIVE_HEADER_LENGTH];
+        char header[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH];
 
-        int headerBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH, 0);         //Receive starter byte
+        int headerBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH, 0);         //Receive starter byte
 
-        if (headerBytesReceived == RECEIVE_HEADER_LENGTH){ //if correct number of bytes for header were received
+        if (headerBytesReceived == RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH){ //if correct number of bytes for header were received
             if(this->checkReceivedDataHeader(header)){
+                DataType dataType = static_cast<DataType>(header[RECEIVE_HEADER_LENGTH] >> 4);//typecast into dataType
+//                int length = header[RECEIVE_HEADER_LENGTH] & 0x0f; //TODO - make this at least 12 bits not 4
 
-                int dataType = header[RECEIVE_HEADER_LENGTH-1] >> 4; //data type info stored in first half of info carrying byte
-                int length = header[RECEIVE_HEADER_LENGTH-1] & 0x0f; //length info stored in second half of info carrying byte
+//                VLOG(2) << "Length would have been... " <<(((header[RECEIVE_HEADER_LENGTH] & 0x0f) << 8) | header[RECEIVE_HEADER_LENGTH + 1]);
+                int length = (((header[RECEIVE_HEADER_LENGTH] & 0x0f) << 8) | header[RECEIVE_HEADER_LENGTH + 1]);
+                VLOG(2) << "Length is " << length;
+                char *receiveBuffer = new char[length];
+                int bytesReceived = 0;
 
-                VLOG(2) << "Header indicates length: " << length;
+                bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
 
-                //receive data of indicated length
-                char* receiveBuffer = new char[length];
-                int bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
-                (*chunk)->setNumberBytes(bytesReceived);
-                (*chunk)->setDataTypeIdentifier(dataType);
-                (*chunk)->setPayload(receiveBuffer);
-
+                (*receivedChunk)->setDataType(dataType);
+                (*receivedChunk)->setLength(length);
+                (*receivedChunk)->setData(receiveBuffer);
                 return bytesReceived;
             }else{
                 VLOG(2) << "Received data has incorrect header";
