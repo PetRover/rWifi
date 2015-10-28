@@ -19,7 +19,7 @@ namespace RVR
         this->dataType = dataTypeToSet;
     }
 
-    void NetworkChunk::setData(char* dataToSet)
+    void NetworkChunk::setData(char *dataToSet)
     {
         this->data = dataToSet;
     }
@@ -34,7 +34,7 @@ namespace RVR
         return this->dataType;
     }
 
-    char* NetworkChunk::getData()
+    char *NetworkChunk::getData()
     {
         return this->data;
     }
@@ -52,7 +52,8 @@ namespace RVR
         this->commandType = commandTypeToSet;
     }
 
-    void Command::setCommandData(char* commandDataToSet){
+    void Command::setCommandData(char *commandDataToSet)
+    {
         this->commandData = commandDataToSet;
     }
 
@@ -61,7 +62,7 @@ namespace RVR
         return this->commandType;
     }
 
-    char* Command::getCommandData()
+    char *Command::getCommandData()
     {
         return this->commandData;
     }
@@ -71,20 +72,23 @@ namespace RVR
     //First byte of data is the command type - data starts after that byte
     {
         this->commandType = static_cast<CommandType>((networkChunk.getData())[0]);
-        this->commandData = networkChunk.getData()+1; //should be one byte after where the commandType was located
+        this->commandData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
 
-        VLOG(2) << "Creating Command: Type = " << (int)(networkChunk.getData())[0] << ", Data = " << (int)this->commandData[0] << " " << (int)this->commandData[1] << " " << (int)this->commandData[2] << " " << (int)this->commandData[3];
+        VLOG(2) << "Creating Command: Type = " << (int) (networkChunk.getData())[0] << ", Data = " <<
+                (int) this->commandData[0] << " " << (int) this->commandData[1] << " " << (int) this->commandData[2] <<
+                " " << (int) this->commandData[3];
     }
 
     NetworkChunk Command::toNetworkChunk()
     {
-        NetworkChunk* newNetworkChunk = new NetworkChunk;
+        NetworkChunk *newNetworkChunk = new NetworkChunk;
 
-        newNetworkChunk->setLength(COMMAND_LENGTH+1); //TODO - determine if desirable way to set length
+        newNetworkChunk->setLength(COMMAND_LENGTH + 1); //TODO - determine if desirable way to set length
         newNetworkChunk->setDataType(DataType::COMMAND);
 
-        char* dataToSend = new char[COMMAND_LENGTH+1]; //TODO - Adjust for appropriate length if not 4
-        dataToSend[0] = (static_cast<int>(this->getCommandType()) << 4) & COMMAND_LENGTH; //first 4 bits are command type. last 4 are length
+        char *dataToSend = new char[COMMAND_LENGTH + 1]; //TODO - Adjust for appropriate length if not 4
+        dataToSend[0] = (static_cast<int>(this->getCommandType()) << 4) &
+                        COMMAND_LENGTH; //first 4 bits are command type. last 4 are length
         dataToSend[1] = (this->getCommandData())[0];
         dataToSend[2] = (this->getCommandData())[1];
         dataToSend[3] = (this->getCommandData())[2];
@@ -102,7 +106,7 @@ namespace RVR
         this->statusType = statusTypeToSet;
     }
 
-    void Status::setStatusData(char* statusDataToSet)
+    void Status::setStatusData(char *statusDataToSet)
     {
         this->statusData = statusDataToSet;
     }
@@ -112,7 +116,7 @@ namespace RVR
         return this->statusType;
     }
 
-    char* Status::getStatusData()
+    char *Status::getStatusData()
     {
         return this->statusData;
     }
@@ -120,20 +124,23 @@ namespace RVR
     Status::Status(NetworkChunk networkChunk)
     {
         this->statusType = static_cast<StatusType>((networkChunk.getData())[0]);
-        this->statusData = networkChunk.getData()+1; //should be one byte after where the commandType was located
+        this->statusData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
 
-        VLOG(2) << "Creating Status: Type = " << (int)(networkChunk.getData())[0] << ", Data = " << (int)this->statusData[0] << " " << (int)this->statusData[1] << " " << (int)this->statusData[2] << " " << (int)this->statusData[3];
+        VLOG(2) << "Creating Status: Type = " << (int) (networkChunk.getData())[0] << ", Data = " <<
+                (int) this->statusData[0] << " " << (int) this->statusData[1] << " " << (int) this->statusData[2] <<
+                " " << (int) this->statusData[3];
     }
 
     NetworkChunk Status::toNetworkChunk()
     {
-        NetworkChunk* newNetworkChunk = new NetworkChunk;
+        NetworkChunk *newNetworkChunk = new NetworkChunk;
 
-        newNetworkChunk->setLength(STATUS_LENGTH+1);//TODO - determine if desirable way to set length
+        newNetworkChunk->setLength(STATUS_LENGTH + 1);//TODO - determine if desirable way to set length
         newNetworkChunk->setDataType(DataType::STATUS);
 
-        char* dataToSend = new char[STATUS_LENGTH+1]; //TODO - Adjust for appropriate length if not 4
-        dataToSend[0] = (static_cast<int>(this->getStatusType()) << 4) & STATUS_LENGTH; //first 4 bits are command type. last 4 are length
+        char *dataToSend = new char[STATUS_LENGTH + 1]; //TODO - Adjust for appropriate length if not 4
+        dataToSend[0] = (static_cast<int>(this->getStatusType()) << 4) &
+                        STATUS_LENGTH; //first 4 bits are command type. last 4 are length
         dataToSend[1] = (this->getStatusData())[0];
         dataToSend[2] = (this->getStatusData())[1];
         dataToSend[3] = (this->getStatusData())[2];
@@ -152,7 +159,7 @@ namespace RVR
         this->length = lengthToSet;
     }
 
-    void Text::setTextMessage(char* textMessageToSet)
+    void Text::setTextMessage(char *textMessageToSet)
     {
         this->textMessage = textMessageToSet;
     }
@@ -162,7 +169,7 @@ namespace RVR
         return this->length;
     }
 
-    char* Text::getTextMessage()
+    char *Text::getTextMessage()
     {
         return this->textMessage;
     }
@@ -175,7 +182,7 @@ namespace RVR
 
     NetworkChunk Text::toNetworkChunk()
     {
-        NetworkChunk* newNetworkChunk = new NetworkChunk;
+        NetworkChunk *newNetworkChunk = new NetworkChunk;
 
         newNetworkChunk->setLength(this->length); //Equal to the length stored in the Text object
         newNetworkChunk->setDataType(DataType::TEXT);
@@ -187,11 +194,16 @@ namespace RVR
 // ==============================================================
 // Connection NetworkManager Member functions
 // ==============================================================
-    void NetworkManager::initializeNewConnection(std::string connectionName, const char* ipAddress)
+    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port)
     {
-        Connection* connectionPtr = new Connection;
+        this->initializeNewConnection(connectionName,ipAddress, port, SOCK_STREAM);
+    }
 
-        connectionPtr->initializeNewSocket(connectionName, ipAddress);
+    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, int socketType)
+    {
+        Connection *connectionPtr = new Connection;
+
+        connectionPtr->initializeNewSocket(connectionName, ipAddress, port, socketType);
         this->existingConnections.push_back(connectionPtr);//add the connection pointer to list of connection pointers
 
         connectionPtr->initiateConnection();
@@ -200,17 +212,17 @@ namespace RVR
 
     void NetworkManager::terminateConnection(std::string connectionName)
     {
-        Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
+        Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
         int connectionPosition = getPositionByConnectionName(connectionName);
         connectionPtr->terminateConnection();
-        existingConnections.erase (existingConnections.begin()+connectionPosition);
+        existingConnections.erase(existingConnections.begin() + connectionPosition);
 
         return;
     }
 
     void NetworkManager::sendData(std::string connectionName, NetworkChunk *chunk) //TODO - determine type instead of void*
     {
-        Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
+        Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
         connectionPtr->sendData(chunk);
 
         return;
@@ -221,16 +233,17 @@ namespace RVR
     //Received data will be passed back in return argument
     {
         VLOG(1) << "Receiving data...";
-        Connection* connectionPtr = getConnectionPtrByConnectionName(connectionName);
+        Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
         NetworkChunk data = connectionPtr->processData();
 
         return data;
     }
 
-    Connection* NetworkManager::getConnectionPtrByConnectionName(std::string connectionNameToFind)
+    Connection *NetworkManager::getConnectionPtrByConnectionName(std::string connectionNameToFind)
     //iterate through existingConnections list to find the connection ptr associated with the given name
     {
-        for (std::vector<Connection*>::iterator it = this->existingConnections.begin() ; it != this->existingConnections.end(); ++it)
+        for (std::vector<Connection *>::iterator it = this->existingConnections.begin();
+             it != this->existingConnections.end(); ++it)
         {
             if ((*it)->connectionName == connectionNameToFind)
             {
@@ -245,7 +258,8 @@ namespace RVR
     //Used for deleting connection
     {
         int count = 0;
-        for (std::vector<Connection*>::iterator it = this->existingConnections.begin() ; it != this->existingConnections.end(); ++it)
+        for (std::vector<Connection *>::iterator it = this->existingConnections.begin();
+             it != this->existingConnections.end(); ++it)
         {
             if ((*it)->connectionName == connectionNameToFind)
             {
@@ -257,7 +271,7 @@ namespace RVR
         return 0;
     }
 
-    NetworkChunk::NetworkChunk(DataType dataTypeToSet, int lengthToSet, char* dataToSet)
+    NetworkChunk::NetworkChunk(DataType dataTypeToSet, int lengthToSet, char *dataToSet)
     {
         this->dataType = dataTypeToSet;
         this->length = lengthToSet;
@@ -267,9 +281,15 @@ namespace RVR
 // Connection Class Member functions
 // ==============================================================
 
-    void Connection::initializeNewSocket(std::string connectionName, const char* ipAddress)
+    void Connection::initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, int type)
     {
         this->ipAddress = ipAddress;
+        this->socketAddress.sin_addr.s_addr = inet_addr(ipAddress);
+        this->socketAddress.sin_family = AF_INET;
+        this->socketAddress.sin_port = htons(port);
+
+        this->type = type;
+
         this->connectionName = connectionName;
         this->fileDescriptor = this->createEndpoint();
 
@@ -288,7 +308,7 @@ namespace RVR
     //indicates using the default protocol for the domain specified will be used
     //On success, a file descriptor for the new socket is returned.  On error, -1 is returned
     {
-        int fileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
+        int fileDescriptor = socket(AF_INET, this->type, 0);
         return fileDescriptor;
     }
 
@@ -296,13 +316,9 @@ namespace RVR
     //Connects to a socket. Input parameter is the IP address to be formatted.
     //Upon successful completion, connect() shall return 0; otherwise, -1 shall be returned
     {
-        struct sockaddr_in socketAddress;
-        socketAddress.sin_addr.s_addr = inet_addr(this->ipAddress);
-        socketAddress.sin_family = AF_INET;
-        socketAddress.sin_port = htons(1024);
 
         VLOG(1) << "Attempting to connect...";
-        int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &socketAddress, sizeof(socketAddress));
+        int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &this->socketAddress, sizeof(socketAddress));
         if (successStatus == -1){
             VLOG(1) << "Failed to initiate connection";
         }else{
@@ -443,5 +459,4 @@ namespace RVR
         }
     return 0;
     }
-
 }

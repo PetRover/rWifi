@@ -117,12 +117,14 @@ namespace RVR
         // A connection object represents one socket
     {
     private:
-        const char* ipAddress;
+        const char *ipAddress;
+        struct sockaddr_in socketAddress;
+        int type;
         int fileDescriptor;
         std::queue<NetworkChunk*> chunkQueue;                 // empty queue
     public:
-        std::string connectionName;
-        void initializeNewSocket(std::string connectionName, const char* ipAddress);
+        const std::string connectionName;
+        void initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, int type);
         int createEndpoint();
         void initiateConnection();
         int terminateConnection();
@@ -142,7 +144,9 @@ namespace RVR
         Connection* getConnectionPtrByConnectionName(std::string connectionNameToFind);
         int getPositionByConnectionName(std::string connectionNameToFind);
     public:
-        void initializeNewConnection(std::string connectionName, const char* ipAddress);
+        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port); // Connection type defaults to SOCK_STREAM
+        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, int socketType);
+
         void terminateConnection(std::string connectionName);
         void sendData(std::string connectionName, NetworkChunk *chunk);
         NetworkChunk getData(std::string connectionName);
