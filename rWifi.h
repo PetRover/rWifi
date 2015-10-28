@@ -123,7 +123,7 @@ namespace RVR
         int fileDescriptor;
         std::queue<NetworkChunk*> chunkQueue;                 // empty queue
     public:
-        const std::string connectionName;
+        std::string connectionName;
         void initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, int type);
         int createEndpoint();
         void initiateConnection();
