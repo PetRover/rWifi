@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <unistd.h>
 
 namespace RVR
 {
