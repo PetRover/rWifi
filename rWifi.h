@@ -9,6 +9,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/fcntl.h>
+#include <errno.h>
+#include <stdio.h>
 #include <string>
 #include <vector>
 #include <queue>
@@ -29,6 +32,12 @@ namespace RVR
         NONE
     };
 
+    enum class ConnectionInitType
+    // Values representing whether a connection is to host a new socket connection and wait for the a connection or actively try to connect
+    {
+        LISTEN,
+        CONNECT
+    };
 
     enum class CommandType
     //This enum holds the list of different commands that Rover can execute
@@ -126,6 +135,7 @@ namespace RVR
         std::string connectionName;
         void initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, int type);
         int createEndpoint();
+        int listenForConnection(int timeOut_ms);
         void initiateConnection();
         int terminateConnection();
         NetworkChunk processData();
@@ -140,12 +150,15 @@ namespace RVR
     class NetworkManager
     {
     private:
+        int connectTimeout_ms = 1000;
         std::vector<Connection*> existingConnections;
         Connection* getConnectionPtrByConnectionName(std::string connectionNameToFind);
         int getPositionByConnectionName(std::string connectionNameToFind);
     public:
-        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port); // Connection type defaults to SOCK_STREAM
-        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, int socketType);
+        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType); // Connection type defaults to SOCK_STREAM
+        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, int socketType);
+
+        void setConnectTimeout(int timeout_ms);
 
         void terminateConnection(std::string connectionName);
         void sendData(std::string connectionName, NetworkChunk *chunk);

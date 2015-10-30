@@ -194,19 +194,27 @@ namespace RVR
 // ==============================================================
 // Connection NetworkManager Member functions
 // ==============================================================
-    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port)
+    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType)
     {
-        this->initializeNewConnection(connectionName,ipAddress, port, SOCK_STREAM);
+        this->initializeNewConnection(connectionName, ipAddress, port, initType, SOCK_STREAM);
     }
 
-    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, int socketType)
+    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, int socketType)
     {
         Connection *connectionPtr = new Connection;
 
         connectionPtr->initializeNewSocket(connectionName, ipAddress, port, socketType);
         this->existingConnections.push_back(connectionPtr);//add the connection pointer to list of connection pointers
 
-        connectionPtr->initiateConnection();
+        switch (initType)
+        {
+            case ConnectionInitType::CONNECT:
+                connectionPtr->initiateConnection();
+                break;
+            case ConnectionInitType::LISTEN:
+                connectionPtr->listenForConnection(this->connectTimeout_ms);
+        }
+
         return;
     }
 
@@ -277,11 +285,16 @@ namespace RVR
         this->length = lengthToSet;
         this->data = dataToSet;
     }
+
+    void NetworkManager::setConnectTimeout(int timeout_ms)
+    {
+        this->connectTimeout_ms = timeout_ms;
+    }
 // ==============================================================
 // Connection Class Member functions
 // ==============================================================
 
-    void Connection::initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, int type)
+    void Connection::initializeNewSocket(std::string connectionName, const char *ipAddress, u_short port, int type)
     {
         this->ipAddress = ipAddress;
         this->socketAddress.sin_addr.s_addr = inet_addr(ipAddress);
@@ -296,8 +309,10 @@ namespace RVR
         if (fileDescriptor == -1)
         {
             VLOG(2) << "Failed to initialize new socket";
-        }else{
-            VLOG(2) << "Successfully initiated new socket!\nFileDescriptor: " << this->fileDescriptor << "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddress <<"\n";
+        } else
+        {
+            VLOG(2) << "Successfully initiated new socket!\nFileDescriptor: " << this->fileDescriptor <<
+                    "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddress << "\n";
         }
         return;
     }
@@ -310,6 +325,58 @@ namespace RVR
     {
         int fileDescriptor = socket(AF_INET, this->type, 0);
         return fileDescriptor;
+    }
+
+    int Connection::listenForConnection(int timeOut_ms)
+    {
+        // Put the socket in non blocking mode (making sure to preserve any previous flags)
+        int flags = fcntl(this->fileDescriptor, F_GETFL, 0);
+        flags |= O_NONBLOCK;
+        fcntl(this->fileDescriptor, F_SETFL, flags);
+
+        // setup the timeout struct for the select call
+        struct timeval tv;
+        tv.tv_sec = 10;
+        tv.tv_usec = 0;//100*timeOut_ms;
+
+        // Bind the socket to the sever address
+        VLOG(2) << "Binding to: "<< this->ipAddress << ":" << this->socketAddress.sin_port;
+        bind(this->fileDescriptor, (struct sockaddr *) &this->socketAddress, sizeof(this->socketAddress));
+        VLOG(2) << "[DONE]";
+
+        // start the sever listening for connection with a queue size of 1
+        VLOG(2) << "Starting listener";
+        listen(this->fileDescriptor, 1);
+        VLOG(2) << "[DONE]";
+
+        fd_set fdSet;
+
+        FD_ZERO(&fdSet);
+        FD_SET(this->fileDescriptor, &fdSet);
+
+        VLOG(2) << "Waiting for a connection to the listening socket...";
+
+        int err = select(this->fileDescriptor + 1, &fdSet, NULL, NULL, &tv);
+        LOG(DEBUG) << strerror(errno);
+        if (err > 0) {
+            if (FD_ISSET(this->fileDescriptor, &fdSet))
+            {
+
+                socklen_t addrLen = sizeof(this->socketAddress);
+                int fd = accept(this->fileDescriptor, (struct sockaddr *)&this->socketAddress, &addrLen);
+                VLOG(1) << "Connection established to: " <<  int(this->socketAddress.sin_addr.s_addr&0xFF)
+                            << "." << int((this->socketAddress.sin_addr.s_addr&0xFF00)>>8)
+                            << "." << int((this->socketAddress.sin_addr.s_addr&0xFF0000)>>16)
+                            << "." << int((this->socketAddress.sin_addr.s_addr&0xFF000000)>>24)
+                            << ":" << this->socketAddress.sin_port;
+                VLOG(2) << "We got a connection. Closing the old file descriptor and pointing this object to the new socket";
+                close(this->fileDescriptor);
+                this->fileDescriptor = fd;
+                VLOG(2) << "[DONE]";
+            }
+        }
+
+        return 0;
     }
 
     void Connection::initiateConnection()
@@ -341,6 +408,10 @@ namespace RVR
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
+        char* bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength()];
+        bzero(bitStream, sizeof(bitStream));
+        std::cout << "Bit stream to be sent is: " << std::hex << bitStream;
+
         ssize_t bytesSent = send(this->fileDescriptor, chunk->getData(), chunk->getLength(), 0);
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
@@ -386,7 +457,7 @@ namespace RVR
         {
             if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
             {
-                VLOG(2) << "Incorrect data header";
+                VLOG(2) << "Incorrect data header -- RECEIVED:" << header << ", EXPECTED:"<< receiveHeaderValue[i];
                 return 0;
             }
         }
