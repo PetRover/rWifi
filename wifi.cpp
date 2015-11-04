@@ -408,11 +408,19 @@ namespace RVR
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
-        char* bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength()];
+        char bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength()];
         bzero(bitStream, sizeof(bitStream));
-        std::cout << "Bit stream to be sent is: " << std::hex << bitStream;
 
-        ssize_t bytesSent = send(this->fileDescriptor, chunk->getData(), chunk->getLength(), 0);
+        bitStream[0] = receiveHeaderValue[0];
+        bitStream[1] = (static_cast<int>(chunk->getDataType()) << 4) | (chunk->getLength() >> 8);
+        bitStream[2] = chunk->getLength() & 0xff; //lsb of length
+
+        for (int i = 0; i < chunk->getLength(); i++){
+            bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+i] = (chunk->getData())[i];
+        }
+
+        std::cout << "Bit stream to be sent is: " << std::hex << bitStream;
+        ssize_t bytesSent = send(this->fileDescriptor, bitStream, sizeof(bitStream), 0);
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
     }
