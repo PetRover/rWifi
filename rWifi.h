@@ -45,7 +45,9 @@ namespace RVR
     {
         DRIVE_FORWARD,
         DRIVE_BACKWARD,
-        DRIVE_LEFT
+        TURN_LEFT,
+        TURN_RIGHT,
+        STOP_DRIVE
     };
 
     enum class StatusType
