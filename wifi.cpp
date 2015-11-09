@@ -87,8 +87,7 @@ namespace RVR
         newNetworkChunk->setDataType(DataType::COMMAND);
 
         char *dataToSend = new char[COMMAND_LENGTH + 1]; //TODO - Adjust for appropriate length if not 4
-        dataToSend[0] = (static_cast<int>(this->getCommandType()) << 4) &
-                        COMMAND_LENGTH; //first 4 bits are command type. last 4 are length
+        dataToSend[0] = (((static_cast<int>(this->getCommandType())) << 4) | COMMAND_LENGTH); //first 4 bits are command type. last 4 are length
         dataToSend[1] = (this->getCommandData())[0];
         dataToSend[2] = (this->getCommandData())[1];
         dataToSend[3] = (this->getCommandData())[2];
@@ -139,12 +138,12 @@ namespace RVR
         newNetworkChunk->setDataType(DataType::STATUS);
 
         char *dataToSend = new char[STATUS_LENGTH + 1]; //TODO - Adjust for appropriate length if not 4
-        dataToSend[0] = (static_cast<int>(this->getStatusType()) << 4) &
-                        STATUS_LENGTH; //first 4 bits are command type. last 4 are length
+        dataToSend[0] = (((static_cast<int>(this->getStatusType())) << 4) | STATUS_LENGTH); //first 4 bits are command type. last 4 are length
         dataToSend[1] = (this->getStatusData())[0];
         dataToSend[2] = (this->getStatusData())[1];
         dataToSend[3] = (this->getStatusData())[2];
         dataToSend[4] = (this->getStatusData())[3];
+
         newNetworkChunk->setData(dataToSend);
 
         return *newNetworkChunk;
@@ -412,14 +411,22 @@ namespace RVR
         bzero(bitStream, sizeof(bitStream));
 
         bitStream[0] = receiveHeaderValue[0];
-        bitStream[1] = (static_cast<int>(chunk->getDataType()) << 4) | (chunk->getLength() >> 8);
-        bitStream[2] = chunk->getLength() & 0xff; //lsb of length
+        bitStream[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 8));
+        bitStream[2] = chunk->getLength(); //lsb of length
+
+        VLOG(2) << "Sending datatype: " << static_cast<int>(chunk->getDataType());
+        VLOG(2) << "Sending data bytes: " << chunk->getLength();
+        VLOG(2) << "With headers, sending total bytes: " << sizeof(bitStream);
 
         for (int i = 0; i < chunk->getLength(); i++){
             bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+i] = (chunk->getData())[i];
         }
 
-        std::cout << "Bit stream to be sent is: " << std::hex << bitStream;
+        VLOG(2) << "Bit stream to be sent is: ";
+        for (int i = 0; i < sizeof(bitStream); i++){
+            VLOG(2) << static_cast<int>(bitStream[i]);
+        }
+//        std::cout << "Bit stream to be sent is: " << std::hex << bitStream;
         ssize_t bytesSent = send(this->fileDescriptor, bitStream, sizeof(bitStream), 0);
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
