@@ -82,15 +82,18 @@ namespace RVR
     private:
         CommandType commandType; //what type of comamnd this is
         char* commandData; //holds array of bytes that are passed in as data
+        bool dataExists = 0;
     public:
         Command() { }
         Command(NetworkChunk networkChunk); //constructor - takes NetworkChunk and creates command
         NetworkChunk toNetworkChunk(); //export to NetworkChunk to be ready to send over network
 
+        void setDataExists(bool dataExistsToSet);
         void setCommandType(CommandType commandTypeToSet);
         void setCommandData(char* commandDataToSet);
         CommandType getCommandType();
         char* getCommandData();
+        bool getDataExists();
     };
 
     class Status
@@ -98,15 +101,18 @@ namespace RVR
     private:
         StatusType statusType;
         char* statusData;
+        bool dataExists = 0;
     public:
         Status() { }
         Status(NetworkChunk networkChunk);
         NetworkChunk toNetworkChunk();
 
+        void setDataExists(bool dataExistsToSet);
         void setStatusType(StatusType statusTypeToSet);
         void setStatusData(char* statusDataToSet);
         StatusType getStatusType();
         char* getStatusData();
+        bool getDataExists();
     };
 
     class Text

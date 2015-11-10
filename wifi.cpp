@@ -52,14 +52,25 @@ namespace RVR
         this->commandType = commandTypeToSet;
     }
 
+    void Command::setDataExists(bool dataExistsToSet)
+    {
+        this->dataExists = dataExistsToSet;
+    }
+
     void Command::setCommandData(char *commandDataToSet)
     {
         this->commandData = commandDataToSet;
+        this->dataExists = 1;
     }
 
     CommandType Command::getCommandType()
     {
         return this->commandType;
+    }
+
+    bool Command::getDataExists()
+    {
+        return this->dataExists;
     }
 
     char *Command::getCommandData()
@@ -71,12 +82,14 @@ namespace RVR
     //This is the constructor. It takes a networkChunk and turns it into a command
     //First byte of data is the command type - data starts after that byte
     {
-        this->commandType = static_cast<CommandType>((networkChunk.getData())[0]);
+        this->commandType = static_cast<CommandType>((networkChunk.getData())[0] >> 4);
+        VLOG(2) << "Creating Command: Type = " << (int) ((networkChunk.getData())[0] >> 4);
         this->commandData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
 
-        VLOG(2) << "Creating Command: Type = " << (int) (networkChunk.getData())[0] << ", Data = " <<
-                (int) this->commandData[0] << " " << (int) this->commandData[1] << " " << (int) this->commandData[2] <<
-                " " << (int) this->commandData[3];
+        VLOG(2) <<"Data = " << (int) this->commandData[0] << " " << (int) this->commandData[1] << " " <<
+                    (int) this->commandData[2] << " " << (int) this->commandData[3];
+        this->dataExists = (this->commandData[0] & 0x80) ? 1 : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1, else 0
+        VLOG(2) <<"Data exists: " << this->dataExists;
     }
 
     NetworkChunk Command::toNetworkChunk()
@@ -88,10 +101,19 @@ namespace RVR
 
         char *dataToSend = new char[COMMAND_LENGTH + 1]; //TODO - Adjust for appropriate length if not 4
         dataToSend[0] = (((static_cast<int>(this->getCommandType())) << 4) | COMMAND_LENGTH); //first 4 bits are command type. last 4 are length
-        dataToSend[1] = (this->getCommandData())[0];
-        dataToSend[2] = (this->getCommandData())[1];
-        dataToSend[3] = (this->getCommandData())[2];
-        dataToSend[4] = (this->getCommandData())[3];
+
+        if (this->dataExists){
+            dataToSend[1] = 0x80 | ((this->getCommandData())[0] & 0x7f); //dataExists bit (x) 0bx0000000 is a 1
+            dataToSend[2] = (this->getCommandData())[1];
+            dataToSend[3] = (this->getCommandData())[2];
+            dataToSend[4] = (this->getCommandData())[3];
+        }else{
+            dataToSend[1] = 0; //dataExists bit (x) 0bx0000000 is a 0
+            dataToSend[2] = 0;
+            dataToSend[3] = 0;
+            dataToSend[4] = 0;
+        }
+
         newNetworkChunk->setData(dataToSend);
 
         return *newNetworkChunk;
@@ -108,6 +130,12 @@ namespace RVR
     void Status::setStatusData(char *statusDataToSet)
     {
         this->statusData = statusDataToSet;
+        this->dataExists = 1;
+    }
+
+    void Status::setDataExists(bool dataExistsToSet)
+    {
+        this->dataExists = dataExistsToSet;
     }
 
     StatusType Status::getStatusType()
@@ -120,14 +148,22 @@ namespace RVR
         return this->statusData;
     }
 
+    bool Status::getDataExists()
+    {
+        return this->dataExists;
+    }
+
     Status::Status(NetworkChunk networkChunk)
     {
-        this->statusType = static_cast<StatusType>((networkChunk.getData())[0]);
+        this->statusType = static_cast<StatusType>((networkChunk.getData())[0] >> 4);
+        VLOG(2) << "Creating Status: Type = " << (int) ((networkChunk.getData())[0] >> 4);
         this->statusData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
 
-        VLOG(2) << "Creating Status: Type = " << (int) (networkChunk.getData())[0] << ", Data = " <<
-                (int) this->statusData[0] << " " << (int) this->statusData[1] << " " << (int) this->statusData[2] <<
-                " " << (int) this->statusData[3];
+        VLOG(2) <<"Data = " << (int) this->statusData[0] << " " << (int) this->statusData[1] << " " <<
+                (int) this->statusData[2] << " " << (int) this->statusData[3];
+        this->dataExists = (this->statusData[0] & 0x80) ? 1 : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1, else 0
+        VLOG(2) <<"Data exists: " << this->dataExists;
+
     }
 
     NetworkChunk Status::toNetworkChunk()
@@ -139,10 +175,17 @@ namespace RVR
 
         char *dataToSend = new char[STATUS_LENGTH + 1]; //TODO - Adjust for appropriate length if not 4
         dataToSend[0] = (((static_cast<int>(this->getStatusType())) << 4) | STATUS_LENGTH); //first 4 bits are command type. last 4 are length
-        dataToSend[1] = (this->getStatusData())[0];
-        dataToSend[2] = (this->getStatusData())[1];
-        dataToSend[3] = (this->getStatusData())[2];
-        dataToSend[4] = (this->getStatusData())[3];
+        if (this->dataExists){
+            dataToSend[1] = 0x80 | ((this->getStatusData())[0] & 0x7f); //dataExists bit (x) 0bx0000000 is a 1
+            dataToSend[2] = (this->getStatusData())[1];
+            dataToSend[3] = (this->getStatusData())[2];
+            dataToSend[4] = (this->getStatusData())[3];
+        }else{
+            dataToSend[1] = 0; //dataExists bit (x) 0bx0000000 is a 0
+            dataToSend[2] = 0;
+            dataToSend[3] = 0;
+            dataToSend[4] = 0;
+        }
 
         newNetworkChunk->setData(dataToSend);
 
