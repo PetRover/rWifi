@@ -47,7 +47,8 @@ namespace RVR
         DRIVE_BACKWARD,
         TURN_LEFT,
         TURN_RIGHT,
-        STOP_DRIVE
+        STOP_DRIVE,
+        START_STREAM
     };
 
     enum class StatusType
