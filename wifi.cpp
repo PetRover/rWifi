@@ -83,13 +83,13 @@ namespace RVR
     //First byte of data is the command type - data starts after that byte
     {
         this->commandType = static_cast<CommandType>((networkChunk.getData())[0] >> 4);
-        VLOG(2) << "Creating Command: Type = " << (int) ((networkChunk.getData())[0] >> 4);
+        VLOG(3) << "Creating Command: Type = " << (int) ((networkChunk.getData())[0] >> 4);
         this->commandData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
 
-        VLOG(2) <<"Data = " << (int) this->commandData[0] << " " << (int) this->commandData[1] << " " <<
+        VLOG(3) <<"Data = " << (int) this->commandData[0] << " " << (int) this->commandData[1] << " " <<
                     (int) this->commandData[2] << " " << (int) this->commandData[3];
         this->dataExists = (this->commandData[0] & 0x80) ? 1 : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1, else 0
-        VLOG(2) <<"Data exists: " << this->dataExists;
+        VLOG(3) <<"This command contains data: " << this->dataExists;
     }
 
     NetworkChunk Command::toNetworkChunk()
@@ -162,7 +162,7 @@ namespace RVR
         VLOG(2) <<"Data = " << (int) this->statusData[0] << " " << (int) this->statusData[1] << " " <<
                 (int) this->statusData[2] << " " << (int) this->statusData[3];
         this->dataExists = (this->statusData[0] & 0x80) ? 1 : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1, else 0
-        VLOG(2) <<"Data exists: " << this->dataExists;
+        VLOG(2) <<"This status contains data: " << this->dataExists;
 
     }
 
@@ -298,7 +298,7 @@ namespace RVR
     NetworkChunk NetworkManager::getData(std::string connectionName)
     //Received data will be passed back in return argument
     {
-        VLOG(1) << "Receiving data...";
+        VLOG(3) << "Receiving data";
         Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
         NetworkChunk data = connectionPtr->processData();
 
@@ -511,7 +511,7 @@ namespace RVR
                 bytesSent = sendto(this->fileDescriptor, bitStream,sizeof(bitStream), 0, (struct sockaddr*) &si_other, slen);
                 break;
         }
-        printf("Sent %d bytes\n", bytesSent);
+        VLOG(2) << "sent " << bytesSent << " bytes";
         return bytesSent;
     }
 
@@ -524,14 +524,14 @@ namespace RVR
 
         do{//while there is data to be received in the buffer
             NetworkChunk* receivedChunk = new NetworkChunk; //create a chunk
-            VLOG(2) << "Data is being received off buffer...";
-            bytesReceived = this->receiveDataFromBuffer(&receivedChunk);//try to fill it from the buffer
+            VLOG(3) << "Receiving chunk off buffer";
+            bytesReceived = this->receiveChunk(&receivedChunk);//try to fill it from the buffer
 
             if(bytesReceived > 0){ //if something was received, store it into the queue
                 this->chunkQueue.push (receivedChunk);
             }
             else {//buffer was empty - nothing was received
-                VLOG(2) << "No data to push into queue";
+                VLOG(3) << "No data to push into queue";
                 bytesReceived = 0;
             }
             chunksReceived++;
@@ -544,108 +544,90 @@ namespace RVR
             this->chunkQueue.pop();//delete the oldest chunk from the queue
             return *oldestChunk;
         } else{
-            VLOG(2) << "No data in queue to pop";
+            VLOG(3) << "No data in queue to pop";
 //            return NULL_CHUNK; //TODO - whatever is processing data must be looking for this.
         }
     }
 
-    int Connection::checkReceivedDataHeader(char* header)
+    int Connection::checkDataHeader()
     {
+        char* header = new char[RECEIVE_HEADER_LENGTH];
+        receive(header, RECEIVE_HEADER_LENGTH);
+
         for (int i=0;i<(RECEIVE_HEADER_LENGTH);i++)//minus 1 because last byte is the one carrying length/type info
         {
             if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
             {
-                VLOG(2) << "Incorrect data header -- RECEIVED:" << header << ", EXPECTED:"<< receiveHeaderValue[i];
+                VLOG(3) << "Incorrect data header -- RECEIVED:" << header << ", EXPECTED:"<< receiveHeaderValue[i];
                 return 0;
             }
         }
-        VLOG(2) << "Correct data header";
+        VLOG(3) << "Correct data header";
         return 1;
     }
 
-    int Connection::receiveDataFromBuffer(NetworkChunk **receivedChunk)
+    int Connection::receive(char* buffer, int length)
+    {
+        int bytesReceived = 0;
+        struct sockaddr_in si_other;
+        socklen_t slen = sizeof(si_other);
+
+        switch (this->protocol)
+        {
+            case ConnectionProtocol::TCP:
+                bytesReceived = recv(this->fileDescriptor, buffer, length, 0);
+                break;
+            case ConnectionProtocol::UDP:
+                bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0,(struct sockaddr *) &si_other, &slen);
+                break;
+        }
+
+        for (int i = 0; i < length;i++){
+            VLOG(3) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
+        }
+
+        return bytesReceived;
+    }
+
+    int Connection::receiveChunk(NetworkChunk **receivedChunk)
     //Upon successful completion, recv() shall return the length of the message in bytes. If no messages are available to be
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
-        char* header = new char[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH];
-
-        int headerBytesReceived;
-        struct sockaddr_in si_other;
-        socklen_t slen = sizeof(si_other);
-        switch (this->protocol)
+        if(this->checkDataHeader())
         {
-            case ConnectionProtocol::TCP:
-                headerBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH, 0);         //Receive starter byte
-                break;
-            case ConnectionProtocol::UDP:
-                headerBytesReceived = recvfrom(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH, 0,(struct sockaddr *) &si_other, &slen);         //Receive starter byte
-                break;
-        }
+            char* typeLengthInfo = new char[RECEIVE_TYPELENGTH_LENGTH];
+            this->receive(typeLengthInfo, RECEIVE_TYPELENGTH_LENGTH);
 
-        if (headerBytesReceived == RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH){ //if correct number of bytes for header were received
-            if(this->checkReceivedDataHeader(header)){
-                int bytesReceived = this->processReceivedData(receivedChunk, header);
-                return bytesReceived;
-            }else{
-                VLOG(2) << "Received data has incorrect header";
-                int bytesReceivedTakeTwo = this->scanToFindCorrectHeader(receivedChunk, header);
-                return bytesReceivedTakeTwo;//correct header not returned
-                //TODO - enter mode where keep looking for next starter byte
-            }
-        }else{//not even a header was received off buffer
-            VLOG(1) << "No data received";
-            return 0;
-        }
-    }
+            DataType dataType = static_cast<DataType>(typeLengthInfo[0] >> 4);//typecast into dataType
+            int length = (((typeLengthInfo[0] & 0x0f) << 8) | typeLengthInfo[1]);
 
-    int Connection::processReceivedData(NetworkChunk **receivedChunk, char* header)
-    {
-        DataType dataType = static_cast<DataType>(header[RECEIVE_HEADER_LENGTH] >> 4);//typecast into dataType
-        int length = (((header[RECEIVE_HEADER_LENGTH] & 0x0f) << 8) | header[RECEIVE_HEADER_LENGTH + 1]);
-        VLOG(2) << "Length is " << length;
-        char *receiveBuffer = new char[length];
-        int bytesReceived = 0;
+            char *receiveBuffer = new char[length];
+            int bytesReceived = this->receive(receiveBuffer, length);
 
-        struct sockaddr_in si_other;
-        socklen_t slen = sizeof(si_other);
-        switch (this->protocol)
-        {
-            case ConnectionProtocol::TCP:
-                bytesReceived = recv(this->fileDescriptor, header, length, 0);         //Receive starter byte
-                break;
-            case ConnectionProtocol::UDP:
-                bytesReceived = recvfrom(this->fileDescriptor, header, length, 0,(struct sockaddr *) &si_other, &slen);         //Receive starter byte
-                break;
-        }
+            (*receivedChunk)->setDataType(dataType);
+            (*receivedChunk)->setLength(length);
+            (*receivedChunk)->setData(receiveBuffer);
 
-        (*receivedChunk)->setDataType(dataType);
-        (*receivedChunk)->setLength(length);
-        (*receivedChunk)->setData(receiveBuffer);
-        return bytesReceived;
-    }
-
-    int Connection::scanToFindCorrectHeader(NetworkChunk **receivedChunk, char* header)
-    {
-        VLOG(2) << "Starting search for correct header because we are so lost...";
-        char *receiveBuffer = new char[1];
-
-        for (int waitCount = 0; waitCount < 100; waitCount++) //how many bytes we check for the header
-        {
-            VLOG(2) << "Attempt " << waitCount << " to find header";
-            recv(this->fileDescriptor, receiveBuffer, 1, 0); //receive 1 byte
-            if (receiveBuffer[0] == 52)
+            switch(dataType)
             {
-                VLOG(2) << "The header has been found!";
-                header[0] = 52;
-                recv(this->fileDescriptor, receiveBuffer, RECEIVE_TYPELENGTH_LENGTH, 0); //receive 1 byte
-                for (int j = 0; j < RECEIVE_TYPELENGTH_LENGTH; j++){
-                    header[j+1] = receiveBuffer[j];
-                }
-                int bytesReceived = this->processReceivedData(receivedChunk,header);
-                return bytesReceived;
+                case DataType::COMMAND:
+                    VLOG(2) << "Chunk received-> DataType: COMMAND Length:" << length;
+                    break;
+                case DataType::STATUS:
+                    VLOG(2) << "Chunk received-> DataType: STATUS Length:" << length;
+                    break;
+                case DataType::CAMERA:
+                    VLOG(2) << "Chunk received-> DataType: CAMERA Length:" << length;
+                    break;
+                case DataType::TEXT:
+                    VLOG(2) << "Chunk received-> DataType: TEXT Length:" << length;
+                    break;
             }
+            return bytesReceived;
+        }else{
+            VLOG(2) << "Received data has incorrect header";
         }
-    return 0;
+
     }
 }

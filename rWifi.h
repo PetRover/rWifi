@@ -157,10 +157,9 @@ namespace RVR
         int bindToSocket();
         NetworkChunk processData();
         int sendData(NetworkChunk *chunk);
-        int receiveDataFromBuffer(NetworkChunk **chunk);
-        int checkReceivedDataHeader(char* header);
-        int scanToFindCorrectHeader(NetworkChunk **receivedChunk, char* header);
-        int processReceivedData(NetworkChunk **receivedChunk, char* header);
+        int receiveChunk(NetworkChunk **chunk);
+        int receive(char* buffer, int length);
+        int checkDataHeader();
     };
 
     class NetworkManager
