@@ -235,29 +235,45 @@ namespace RVR
 
 // ==============================================================
 // Connection NetworkManager Member functions
-// ==============================================================
-    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType)
-    {
-        this->initializeNewConnection(connectionName, ipAddress, port, initType, SOCK_STREAM);
-    }
+// ==============================================================send(
 
-    void NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, int socketType)
+    int NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, ConnectionProtocol protocol)
     {
         Connection *connectionPtr = new Connection;
-
-        connectionPtr->initializeNewSocket(connectionName, ipAddress, port, socketType);
+        connectionPtr->initializeNewSocket(connectionName, ipAddress, port, protocol);
         this->existingConnections.push_back(connectionPtr);//add the connection pointer to list of connection pointers
 
         switch (initType)
         {
             case ConnectionInitType::CONNECT:
-                connectionPtr->initiateConnection();
+                switch (protocol)
+                {
+                    case ConnectionProtocol::TCP:
+                        if(!(connectionPtr->initiateConnection()))
+                        {
+                            return 0; //failed to initiateConnection
+                        }
+                        break;
+                    case ConnectionProtocol::UDP:
+                        if(!(connectionPtr->bindToSocket()))
+                        {
+                            return 0; //failed to bind to socket
+                        }
+                        break;
+                }
                 break;
             case ConnectionInitType::LISTEN:
-                connectionPtr->listenForConnection(this->connectTimeout_ms);
+                switch (protocol)
+                {
+                    case ConnectionProtocol::TCP:
+                        connectionPtr->listenForConnection(this->connectTimeout_ms);
+                        break;
+                    case ConnectionProtocol::UDP:
+                        //No further action for UDP
+                        break;
+                }
         }
-
-        return;
+        return 1;
     }
 
     void NetworkManager::terminateConnection(std::string connectionName)
@@ -336,37 +352,49 @@ namespace RVR
 // Connection Class Member functions
 // ==============================================================
 
-    void Connection::initializeNewSocket(std::string connectionName, const char *ipAddress, u_short port, int type)
+    int Connection::initializeNewSocket(std::string connectionName, const char *ipAddress, u_short port, ConnectionProtocol protocol)
     {
         this->ipAddress = ipAddress;
+        this->connectionName = connectionName;
+        this->protocol = protocol;
         this->socketAddress.sin_addr.s_addr = inet_addr(ipAddress);
         this->socketAddress.sin_family = AF_INET;
         this->socketAddress.sin_port = htons(port);
 
-        this->type = type;
-
-        this->connectionName = connectionName;
-        this->fileDescriptor = this->createEndpoint();
+        switch (this->protocol)
+        {
+            case ConnectionProtocol::TCP:
+                this->fileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
+                break;
+            case ConnectionProtocol::UDP:
+                this->fileDescriptor = socket(AF_INET, SOCK_DGRAM, 0);
+                break;
+        }
 
         if (fileDescriptor == -1)
         {
             VLOG(2) << "Failed to initialize new socket";
+            return 0;
         } else
         {
             VLOG(2) << "Successfully initiated new socket!\nFileDescriptor: " << this->fileDescriptor <<
                     "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddress << "\n";
+            return 1;
         }
-        return;
     }
 
-    int Connection::createEndpoint()
-    //Socket creates endpoint for communication. Parameters determine following features: Domain of AF_INET indicates IPv4,
-    //Type of SOCK_STREAM indicates sequenced, reliable, two-way, connection- based byte streams. 0 for protocol parameter
-    //indicates using the default protocol for the domain specified will be used
-    //On success, a file descriptor for the new socket is returned.  On error, -1 is returned
+    int Connection::bindToSocket()
     {
-        int fileDescriptor = socket(AF_INET, this->type, 0);
-        return fileDescriptor;
+        int successStatus = bind(this->fileDescriptor, (struct sockaddr *) &this->socketAddress, sizeof(this->socketAddress));
+        if (successStatus == -1)
+        {
+            VLOG(2) << "Failed to bind to socket";
+            return 0;
+        } else
+        {
+            VLOG(2) << "Successfully bount to socket";
+            return 1;
+        }
     }
 
     int Connection::listenForConnection(int timeOut_ms)
@@ -421,7 +449,7 @@ namespace RVR
         return 0;
     }
 
-    void Connection::initiateConnection()
+    int Connection::initiateConnection()
     //Connects to a socket. Input parameter is the IP address to be formatted.
     //Upon successful completion, connect() shall return 0; otherwise, -1 shall be returned
     {
@@ -430,10 +458,11 @@ namespace RVR
         int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &this->socketAddress, sizeof(socketAddress));
         if (successStatus == -1){
             VLOG(1) << "Failed to initiate connection";
+            return 0;
         }else{
             VLOG(1) << "Sucessfully initiated connection";
+            return 1;
         }
-        return;
     }
 
     int Connection::terminateConnection()
@@ -469,8 +498,19 @@ namespace RVR
         for (int i = 0; i < sizeof(bitStream); i++){
             VLOG(2) << static_cast<int>(bitStream[i]);
         }
-//        std::cout << "Bit stream to be sent is: " << std::hex << bitStream;
-        ssize_t bytesSent = send(this->fileDescriptor, bitStream, sizeof(bitStream), 0);
+
+        ssize_t bytesSent;
+        struct sockaddr_in si_other;
+        socklen_t slen = sizeof(si_other);
+        switch (this->protocol)
+        {
+            case ConnectionProtocol::TCP:
+                bytesSent = send(this->fileDescriptor, bitStream, sizeof(bitStream), 0);
+                break;
+            case ConnectionProtocol::UDP:
+                bytesSent = sendto(this->fileDescriptor, bitStream,sizeof(bitStream), 0, (struct sockaddr*) &si_other, slen);
+                break;
+        }
         printf("Sent %d bytes\n", bytesSent);
         return bytesSent;
     }
@@ -528,10 +568,20 @@ namespace RVR
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
-//        char header[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH];
         char* header = new char[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH];
 
-        int headerBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH, 0);         //Receive starter byte
+        int headerBytesReceived;
+        struct sockaddr_in si_other;
+        socklen_t slen = sizeof(si_other);
+        switch (this->protocol)
+        {
+            case ConnectionProtocol::TCP:
+                headerBytesReceived = recv(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH, 0);         //Receive starter byte
+                break;
+            case ConnectionProtocol::UDP:
+                headerBytesReceived = recvfrom(this->fileDescriptor, header, RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH, 0,(struct sockaddr *) &si_other, &slen);         //Receive starter byte
+                break;
+        }
 
         if (headerBytesReceived == RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH){ //if correct number of bytes for header were received
             if(this->checkReceivedDataHeader(header)){
@@ -557,7 +607,17 @@ namespace RVR
         char *receiveBuffer = new char[length];
         int bytesReceived = 0;
 
-        bytesReceived = recv(this->fileDescriptor, receiveBuffer, length, 0);
+        struct sockaddr_in si_other;
+        socklen_t slen = sizeof(si_other);
+        switch (this->protocol)
+        {
+            case ConnectionProtocol::TCP:
+                bytesReceived = recv(this->fileDescriptor, header, length, 0);         //Receive starter byte
+                break;
+            case ConnectionProtocol::UDP:
+                bytesReceived = recvfrom(this->fileDescriptor, header, length, 0,(struct sockaddr *) &si_other, &slen);         //Receive starter byte
+                break;
+        }
 
         (*receivedChunk)->setDataType(dataType);
         (*receivedChunk)->setLength(length);

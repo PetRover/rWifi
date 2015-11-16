@@ -40,6 +40,12 @@ namespace RVR
         CONNECT
     };
 
+    enum class ConnectionProtocol
+    {
+        TCP,
+        UDP
+    };
+
     enum class CommandType
     //This enum holds the list of different commands that Rover can execute
     {
@@ -48,7 +54,8 @@ namespace RVR
         TURN_LEFT,
         TURN_RIGHT,
         STOP_DRIVE,
-        START_STREAM
+        START_STREAM,
+        DISPENSE_TREAT
     };
 
     enum class StatusType
@@ -138,23 +145,22 @@ namespace RVR
     private:
         const char *ipAddress;
         struct sockaddr_in socketAddress;
-        int type;
+        ConnectionProtocol protocol;
         int fileDescriptor;
-        std::queue<NetworkChunk*> chunkQueue;                 // empty queue
+        std::queue<NetworkChunk*> chunkQueue;
     public:
         std::string connectionName;
-        void initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, int type);
-        int createEndpoint();
+        int initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, ConnectionProtocol protocol);
         int listenForConnection(int timeOut_ms);
-        void initiateConnection();
+        int initiateConnection();
         int terminateConnection();
+        int bindToSocket();
         NetworkChunk processData();
         int sendData(NetworkChunk *chunk);
         int receiveDataFromBuffer(NetworkChunk **chunk);
         int checkReceivedDataHeader(char* header);
         int scanToFindCorrectHeader(NetworkChunk **receivedChunk, char* header);
         int processReceivedData(NetworkChunk **receivedChunk, char* header);
-
     };
 
     class NetworkManager
@@ -165,8 +171,7 @@ namespace RVR
         Connection* getConnectionPtrByConnectionName(std::string connectionNameToFind);
         int getPositionByConnectionName(std::string connectionNameToFind);
     public:
-        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType); // Connection type defaults to SOCK_STREAM
-        void initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, int socketType);
+        int initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, ConnectionProtocol protocol); // Connection type defaults to SOCK_STREAM
 
         void setConnectTimeout(int timeout_ms);
 
