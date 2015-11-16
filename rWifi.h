@@ -143,14 +143,16 @@ namespace RVR
         // A connection object represents one socket
     {
     private:
-        const char *ipAddress;
-        struct sockaddr_in socketAddress;
+        const char *ipAddressLocal;
+        const char *ipAddressRemote;
+        struct sockaddr_in socketLocal;
+        struct sockaddr_in socketRemote;
         ConnectionProtocol protocol;
         int fileDescriptor;
         std::queue<NetworkChunk*> chunkQueue;
     public:
         std::string connectionName;
-        int initializeNewSocket(std::string connectionName, const char* ipAddress, u_short port, ConnectionProtocol protocol);
+        int initializeNewSocket(std::string connectionName, const char* ipAddressLocal, const char* ipAddressRemote, u_short port, ConnectionProtocol protocol);
         int listenForConnection(int timeOut_ms);
         int initiateConnection();
         int terminateConnection();
@@ -170,7 +172,7 @@ namespace RVR
         Connection* getConnectionPtrByConnectionName(std::string connectionNameToFind);
         int getPositionByConnectionName(std::string connectionNameToFind);
     public:
-        int initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, ConnectionProtocol protocol); // Connection type defaults to SOCK_STREAM
+        int initializeNewConnection(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol);
 
         void setConnectTimeout(int timeout_ms);
 

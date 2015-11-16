@@ -237,10 +237,10 @@ namespace RVR
 // Connection NetworkManager Member functions
 // ==============================================================send(
 
-    int NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddress, u_short port, ConnectionInitType initType, ConnectionProtocol protocol)
+    int NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol)
     {
         Connection *connectionPtr = new Connection;
-        connectionPtr->initializeNewSocket(connectionName, ipAddress, port, protocol);
+        connectionPtr->initializeNewSocket(connectionName, ipAddressLocal, ipAddressRemote, port, protocol);
         this->existingConnections.push_back(connectionPtr);//add the connection pointer to list of connection pointers
 
         switch (initType)
@@ -298,7 +298,7 @@ namespace RVR
     NetworkChunk NetworkManager::getData(std::string connectionName)
     //Received data will be passed back in return argument
     {
-        VLOG(3) << "Receiving data";
+        VLOG(2) << "Receiving data";
         Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
         NetworkChunk data = connectionPtr->processData();
 
@@ -352,14 +352,20 @@ namespace RVR
 // Connection Class Member functions
 // ==============================================================
 
-    int Connection::initializeNewSocket(std::string connectionName, const char *ipAddress, u_short port, ConnectionProtocol protocol)
+    int Connection::initializeNewSocket(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionProtocol protocol)
     {
-        this->ipAddress = ipAddress;
         this->connectionName = connectionName;
         this->protocol = protocol;
-        this->socketAddress.sin_addr.s_addr = inet_addr(ipAddress);
-        this->socketAddress.sin_family = AF_INET;
-        this->socketAddress.sin_port = htons(port);
+
+        this->ipAddressLocal = ipAddressLocal;
+        this->socketLocal.sin_addr.s_addr = inet_addr(ipAddressLocal);
+        this->socketLocal.sin_family = AF_INET;
+        this->socketLocal.sin_port = htons(port);
+
+        this->ipAddressRemote = ipAddressRemote;
+        this->socketRemote.sin_addr.s_addr = inet_addr(ipAddressRemote);
+        this->socketRemote.sin_family = AF_INET;
+        this->socketRemote.sin_port = htons(port);
 
         switch (this->protocol)
         {
@@ -378,14 +384,14 @@ namespace RVR
         } else
         {
             VLOG(2) << "Successfully initiated new socket!\nFileDescriptor: " << this->fileDescriptor <<
-                    "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddress << "\n";
+                    "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddressLocal << "\n";
             return 1;
         }
     }
 
     int Connection::bindToSocket()
     {
-        int successStatus = bind(this->fileDescriptor, (struct sockaddr *) &this->socketAddress, sizeof(this->socketAddress));
+        int successStatus = bind(this->fileDescriptor, (struct sockaddr *) &this->socketLocal, sizeof(this->socketLocal));
         if (successStatus == -1)
         {
             VLOG(2) << "Failed to bind to socket";
@@ -410,8 +416,8 @@ namespace RVR
         tv.tv_usec = 0;//100*timeOut_ms;
 
         // Bind the socket to the sever address
-        VLOG(2) << "Binding to: "<< this->ipAddress << ":" << this->socketAddress.sin_port;
-        bind(this->fileDescriptor, (struct sockaddr *) &this->socketAddress, sizeof(this->socketAddress));
+        VLOG(2) << "Binding to: "<< this->ipAddressLocal << ":" << this->socketLocal.sin_port;
+        bind(this->fileDescriptor, (struct sockaddr *) &this->socketLocal, sizeof(this->socketLocal));
         VLOG(2) << "[DONE]";
 
         // start the sever listening for connection with a queue size of 1
@@ -432,13 +438,13 @@ namespace RVR
             if (FD_ISSET(this->fileDescriptor, &fdSet))
             {
 
-                socklen_t addrLen = sizeof(this->socketAddress);
-                int fd = accept(this->fileDescriptor, (struct sockaddr *)&this->socketAddress, &addrLen);
-                VLOG(1) << "Connection established to: " <<  int(this->socketAddress.sin_addr.s_addr&0xFF)
-                            << "." << int((this->socketAddress.sin_addr.s_addr&0xFF00)>>8)
-                            << "." << int((this->socketAddress.sin_addr.s_addr&0xFF0000)>>16)
-                            << "." << int((this->socketAddress.sin_addr.s_addr&0xFF000000)>>24)
-                            << ":" << this->socketAddress.sin_port;
+                socklen_t addrLen = sizeof(this->socketLocal);
+                int fd = accept(this->fileDescriptor, (struct sockaddr *)&this->socketLocal, &addrLen);
+                VLOG(1) << "Connection established to: " <<  int(this->socketLocal.sin_addr.s_addr&0xFF)
+                            << "." << int((this->socketLocal.sin_addr.s_addr&0xFF00)>>8)
+                            << "." << int((this->socketLocal.sin_addr.s_addr&0xFF0000)>>16)
+                            << "." << int((this->socketLocal.sin_addr.s_addr&0xFF000000)>>24)
+                            << ":" << this->socketLocal.sin_port;
                 VLOG(2) << "We got a connection. Closing the old file descriptor and pointing this object to the new socket";
                 close(this->fileDescriptor);
                 this->fileDescriptor = fd;
@@ -455,7 +461,7 @@ namespace RVR
     {
 
         VLOG(1) << "Attempting to connect...";
-        int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &this->socketAddress, sizeof(socketAddress));
+        int successStatus = connect(this->fileDescriptor, (struct sockaddr *) &this->socketRemote, sizeof(socketRemote));
         if (successStatus == -1){
             VLOG(1) << "Failed to initiate connection";
             return 0;
@@ -486,32 +492,31 @@ namespace RVR
         bitStream[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 8));
         bitStream[2] = chunk->getLength(); //lsb of length
 
-        VLOG(2) << "Sending datatype: " << static_cast<int>(chunk->getDataType());
-        VLOG(2) << "Sending data bytes: " << chunk->getLength();
-        VLOG(2) << "With headers, sending total bytes: " << sizeof(bitStream);
-
         for (int i = 0; i < chunk->getLength(); i++){
             bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+i] = (chunk->getData())[i];
         }
 
-        VLOG(2) << "Bit stream to be sent is: ";
         for (int i = 0; i < sizeof(bitStream); i++){
             VLOG(2) << static_cast<int>(bitStream[i]);
+            printf("bitstream %d %d \n",i,static_cast<int>(bitStream[i])); //remove
         }
 
         ssize_t bytesSent;
-        struct sockaddr_in si_other;
-        socklen_t slen = sizeof(si_other);
+        socklen_t slen = sizeof(this->socketRemote);
+
         switch (this->protocol)
         {
             case ConnectionProtocol::TCP:
                 bytesSent = send(this->fileDescriptor, bitStream, sizeof(bitStream), 0);
                 break;
             case ConnectionProtocol::UDP:
-                bytesSent = sendto(this->fileDescriptor, bitStream,sizeof(bitStream), 0, (struct sockaddr*) &si_other, slen);
+                bytesSent = sendto(this->fileDescriptor, bitStream, RECEIVE_HEADER_LENGTH, 0, (struct sockaddr*) &this->socketRemote, slen);
+                bytesSent = sendto(this->fileDescriptor, bitStream+RECEIVE_HEADER_LENGTH, RECEIVE_TYPELENGTH_LENGTH, 0, (struct sockaddr*) &this->socketRemote, slen);
+                bytesSent = sendto(this->fileDescriptor, bitStream+(RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH), (sizeof(bitStream)-(RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH)), 0, (struct sockaddr*) &this->socketRemote, slen);
                 break;
         }
         VLOG(2) << "sent " << bytesSent << " bytes";
+        printf("sent %d bytes \n\n", (int)bytesSent);
         return bytesSent;
     }
 
@@ -562,15 +567,14 @@ namespace RVR
                 return 0;
             }
         }
-        VLOG(3) << "Correct data header";
+        VLOG(2) << "Correct data header";
         return 1;
     }
 
     int Connection::receive(char* buffer, int length)
     {
         int bytesReceived = 0;
-        struct sockaddr_in si_other;
-        socklen_t slen = sizeof(si_other);
+        socklen_t slen = sizeof(this->socketRemote);
 
         switch (this->protocol)
         {
@@ -578,12 +582,12 @@ namespace RVR
                 bytesReceived = recv(this->fileDescriptor, buffer, length, 0);
                 break;
             case ConnectionProtocol::UDP:
-                bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0,(struct sockaddr *) &si_other, &slen);
+                bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0,(struct sockaddr *) &this->socketRemote, &slen);
                 break;
         }
 
         for (int i = 0; i < length;i++){
-            VLOG(3) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
+            VLOG(2) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
         }
 
         return bytesReceived;
@@ -601,6 +605,7 @@ namespace RVR
 
             DataType dataType = static_cast<DataType>(typeLengthInfo[0] >> 4);//typecast into dataType
             int length = (((typeLengthInfo[0] & 0x0f) << 8) | typeLengthInfo[1]);
+            printf("length: %d\n", length);
 
             char *receiveBuffer = new char[length];
             int bytesReceived = this->receive(receiveBuffer, length);
