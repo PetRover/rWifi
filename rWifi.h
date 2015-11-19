@@ -16,11 +16,15 @@
 #include <vector>
 #include <queue>
 #include <unistd.h>
+#include <unordered_map>
+#include <math.h>
 
 namespace RVR
 {
-    const int COMMAND_LENGTH = 4;
-    const int STATUS_LENGTH = 4;
+    const int COMMAND_LENGTH  = 4;
+    const int STATUS_LENGTH   = 4;
+    const int CBHEADER_LENGTH = 3;
+    const int CBDATA_LENGTH   = 2;
 
 
     enum class DataType
@@ -30,6 +34,8 @@ namespace RVR
         STATUS,
         CAMERA,
         TEXT,
+        CBHEADER,
+        CBDATA,
         NONE
     };
 
@@ -44,6 +50,14 @@ namespace RVR
     {
         TCP,
         UDP
+    };
+
+    enum class ReceiveType
+    //When data has been processed, this enum is used to indicate what type was processed to calling function
+    {
+        NETWORKCHUNK,
+        SEGMENT,
+        NODATA
     };
 
     enum class CommandType
@@ -82,8 +96,67 @@ namespace RVR
         int getLength();
     };
 
-//    NetworkChunk NULL_CHUNK = NetworkChunk(DataType::NONE, 0, nullptr);
+    class CbHeader
+    //packs UID, size, and count into data. constructor decodes them. Method encodes them
+    {
+    private:
+        int UID;
+        int numBytes;
+        int numSegments;
+    public:
+        CbHeader() { }
+        CbHeader(NetworkChunk *networkChunk); //constructor - takes NetworkChunk (of type CBHEADER) and creates CbHeader
+        void toNetworkChunk(NetworkChunk *newNetworkChunk); //export to NetworkChunk to be ready to send over network
 
+        void setUID(int UIDToSet);
+        void setNumBytes(int numBytesToSet);
+        void setNumSegments(int numSegmentsToSet);
+        int getUID();
+        int getNumBytes();
+        int getNumSegments();
+    };
+
+    class CbData
+    //packs UID, index and data into data. constructor decodes them. Method encodes them
+    {
+    private:
+        int UID;
+        int index;
+        char *data;
+    public:
+        CbData() { }
+        CbData(NetworkChunk *networkChunk); //constructor - takes NetworkChunk and creates CbData
+        void toNetworkChunk(NetworkChunk *newNetworkChunk); //export to NetworkChunk to be ready to send over network
+
+        void setUID(int UIDToSet);
+        void setIndex(int indexToSet);
+        void setData(char *dataToSet);
+        int getUID();
+        int getIndex();
+        char* getData();
+    };
+
+    class ChunkBox
+    {
+    private:
+        int segmentsFilled;
+        int totalSegments;
+        int totalBytes;
+        char* data;
+    public:
+        ChunkBox() { }
+        ChunkBox(CbHeader *cbHeader);
+
+        void add(CbData *cbData);
+        void setSementsFilled(int segmentsFilledToSet);
+        void setTotalSegments(int totalSegmentsToSet);
+        void setTotalBytes(int totalBytesToSet);
+        void setData(char *dataToSet);
+        int getSementsFilled();
+        int getTotalSegments();
+        int getTotalBytes();
+        char* getData();
+    };
 
     class Command
     {
@@ -150,6 +223,8 @@ namespace RVR
         ConnectionProtocol protocol;
         int fileDescriptor;
         std::queue<NetworkChunk*> chunkQueue;
+        std::unordered_map<int,ChunkBox*> chunkAccumulator;
+        int currUID = 0;
     public:
         std::string connectionName;
         int initializeNewSocket(std::string connectionName, const char* ipAddressLocal, const char* ipAddressRemote, u_short port, ConnectionProtocol protocol);
@@ -157,11 +232,18 @@ namespace RVR
         int initiateConnection();
         int terminateConnection();
         int bindToSocket();
-        NetworkChunk processData();
+        NetworkChunk processNewData();
         int sendData(NetworkChunk *chunk);
-        int receiveChunk(NetworkChunk **chunk);
+        ReceiveType receiveChunk(NetworkChunk *receivedChunk);
         int receive(char* buffer, int length);
         int checkDataHeader();
+        int makeStream(NetworkChunk *chunk);
+        int sendDataUnsegmented(NetworkChunk *chunk);
+        void sendDataSegmented(NetworkChunk *chunk);
+        int sendBitStream(char *bitStream, int length);
+        void processDataOnBuffer();
+        void processDataInMap();
+        ReceiveType popChunkFromQueue(NetworkChunk *chunk);
     };
 
     class NetworkManager
@@ -178,7 +260,7 @@ namespace RVR
 
         void terminateConnection(std::string connectionName);
         void sendData(std::string connectionName, NetworkChunk *chunk);
-        NetworkChunk getData(std::string connectionName);
+        ReceiveType getData(std::string connectionName, NetworkChunk* chunk);
     };
 }
 
