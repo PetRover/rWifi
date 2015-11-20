@@ -166,11 +166,11 @@ namespace RVR
         VLOG(3) << "Creating Command: Type = " << (int) ((networkChunk.getData())[0] >> 4);
         this->commandData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
 
-        VLOG(3) << "Data = " << (int) this->commandData[0] << " " << (int) this->commandData[1] << " " <<
-                (int) this->commandData[2] << " " << (int) this->commandData[3];
+//        VLOG(3) << "Data = " << (int) this->commandData[0] << " " << (int) this->commandData[1] << " " <<
+//                (int) this->commandData[2] << " " << (int) this->commandData[3];
         this->dataExists = (this->commandData[0] & 0x80) ? 1
                                                          : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1, else 0
-        VLOG(3) << "This command contains data: " << this->dataExists;
+//        VLOG(3) << "This command contains data: " << this->dataExists;
     }
 
     NetworkChunk Command::toNetworkChunk()
@@ -605,6 +605,9 @@ namespace RVR
             return 0;
         } else
         {
+            int flags = fcntl(this->fileDescriptor, F_GETFL, 0);
+            flags |= O_NONBLOCK;
+            fcntl(this->fileDescriptor, F_SETFL, flags); //set socket to non-blocking
             VLOG(2) << "Successfully bount to socket";
             return 1;
         }
@@ -697,7 +700,6 @@ namespace RVR
         if (chunk->getLength() < MAX_SEG_LEN)
         {
             this->sendDataUnsegmented(chunk);
-//            this->sendDataSegmented(chunk);
 
         }else{
             this->sendDataSegmented(chunk);
@@ -1004,9 +1006,9 @@ namespace RVR
                 break;
         }
 
-//        for (int i = 0; i < length;i++){
-//            VLOG(2) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
-//        }
+        for (int i = 0; i < length;i++){
+            VLOG(3) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
+        }
 
         return bytesReceived;
     }
