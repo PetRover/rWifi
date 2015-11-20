@@ -21,11 +21,11 @@
 
 namespace RVR
 {
-    const int COMMAND_LENGTH  = 4;
-    const int STATUS_LENGTH   = 4;
-    const int CBHEADER_LENGTH = 3;
-    const int CBDATA_LENGTH   = 2;
-
+    const int COMMAND_LENGTH     = 4;
+    const int STATUS_LENGTH      = 4;
+    const int CBHEADER_LENGTH    = 5;
+    const int CBDATA_INFOLENGTH  = 3;
+    const int CBDATA_DATALENGTH  = 500;
 
     enum class DataType
     //This enum holds the possible types of messages that can be sent. Each of these will be interpretted differently
@@ -34,7 +34,7 @@ namespace RVR
         STATUS,
         CAMERA,
         TEXT,
-        CBHEADER,
+        CBHEADER, //4
         CBDATA,
         NONE
     };
@@ -237,7 +237,7 @@ namespace RVR
         ReceiveType receiveChunk(NetworkChunk *receivedChunk);
         int receive(char* buffer, int length);
         int checkDataHeader();
-        int makeStream(NetworkChunk *chunk);
+        void makeStream(NetworkChunk *chunk);
         int sendDataUnsegmented(NetworkChunk *chunk);
         void sendDataSegmented(NetworkChunk *chunk);
         int sendBitStream(char *bitStream, int length);
