@@ -444,7 +444,7 @@ namespace RVR
 
     int NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol)
     {
-        Connection *connectionPtr = new Connection;
+        Connection *connectionPtr = new Connection();
         connectionPtr->initializeNewSocket(connectionName, ipAddressLocal, ipAddressRemote, port, protocol);
         this->existingConnections.push_back(connectionPtr);//add the connection pointer to list of connection pointers
 

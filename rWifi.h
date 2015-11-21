@@ -71,7 +71,8 @@ namespace RVR
         TURN_RIGHT,
         STOP_DRIVE,
         START_STREAM,
-        DISPENSE_TREAT
+        DISPENSE_TREAT,
+        FLIP_CAMPERA
     };
 
     enum class StatusType
