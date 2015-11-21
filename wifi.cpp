@@ -10,7 +10,7 @@
 #define CHUNKBOX_FULL_CRITERIA       0.75
 #define MAX_UID                      255
 
-int receiveHeaderValue[] = {52};
+int receiveHeaderValue[] = {67};
 
 namespace RVR
 {
@@ -813,9 +813,7 @@ namespace RVR
                 bytesSent = send(this->fileDescriptor, bitStream, length, 0);
                 break;
             case ConnectionProtocol::UDP:
-                bytesSent = sendto(this->fileDescriptor, bitStream, RECEIVE_HEADER_LENGTH, 0, (struct sockaddr*) &this->socketRemote, slen);
-                bytesSent = sendto(this->fileDescriptor, bitStream+RECEIVE_HEADER_LENGTH, RECEIVE_TYPELENGTH_LENGTH, 0, (struct sockaddr*) &this->socketRemote, slen);
-                bytesSent = sendto(this->fileDescriptor, bitStream+(RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH), (length-(RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH)), 0, (struct sockaddr*) &this->socketRemote, slen);
+                bytesSent = sendto(this->fileDescriptor, bitStream, length , 0, (struct sockaddr*) &this->socketRemote, slen);
                 break;
         }
         return bytesSent;
@@ -852,22 +850,64 @@ namespace RVR
         } while (receivedCount < 1);
     }
 
+    int Connection::getReceivedData(char **buffer, int length)
+    {
+        int bytesReceived;
+        switch (this->protocol)
+        {
+            case ConnectionProtocol::TCP:
+                bytesReceived = this->receive(*buffer, length);
+                break;
+            case ConnectionProtocol::UDP:
+                *buffer = this->udpData + this->udpReadPosition;
+
+                for (int i = 0; i < length; i++)
+                {
+                    VLOG(1) << "buffer["<<i<<"]="<<static_cast<int>((*buffer)[this->udpReadPosition]);
+                }
+
+                VLOG(1) << "UDP read position" << this->udpReadPosition;
+                this->udpReadPosition += length;
+                bytesReceived = length;
+                break;
+        }
+        return bytesReceived;
+    }
+
     ReceiveType Connection::receiveChunk(NetworkChunk *receivedChunk)
     //Upon successful completion, recv() shall return the length of the message in bytes. If no messages are available to be
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
+        int bytesReceived;
+        if(this->protocol == ConnectionProtocol::UDP)
+        {
+            int length = RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + 4;//+ MAX_SEG_LEN;
+            this->udpReadPosition = 0;
+            char *tempData = new char[length];
+            if(this->receive(tempData, length) == -1){return ReceiveType::NODATA;} //take fixed length UDP packet off buffer
+            this->udpData = tempData;
+        }
         if(this->checkDataHeader())
         {
             char* typeLengthInfo = new char[RECEIVE_TYPELENGTH_LENGTH];
-            this->receive(typeLengthInfo, RECEIVE_TYPELENGTH_LENGTH);
+//            this->receive(typeLengthInfo, RECEIVE_TYPELENGTH_LENGTH);
+            this->getReceivedData(&typeLengthInfo, RECEIVE_TYPELENGTH_LENGTH);
+            VLOG(1) << "typeLengthInfo[0]="<<static_cast<int>(typeLengthInfo[0]);
+            VLOG(1) << "typeLengthInfo[1]="<<static_cast<int>(typeLengthInfo[1]);
+            VLOG(1) << "Bytes received" << bytesReceived;
 
             DataType dataType = static_cast<DataType>(typeLengthInfo[0] >> 4);//typecast into dataType
             int length = (((typeLengthInfo[0] & 0x0f) << 8) | typeLengthInfo[1]);
             printf("length: %d\n", length);
 
             char *receiveBuffer = new char[length];
-            int bytesReceived = this->receive(receiveBuffer, length);
+//            bytesReceived = this->receive(receiveBuffer, length);
+            bytesReceived = this->getReceivedData(&receiveBuffer, length);
+            VLOG(1) << "receiveBuffer[0]="<<static_cast<int>(receiveBuffer[0]);
+            VLOG(1) << "receiveBuffer[1]="<<static_cast<int>(receiveBuffer[1]);
+            VLOG(1) << "receiveBuffer[2]="<<static_cast<int>(receiveBuffer[2]);
+            VLOG(1) << "receiveBuffer[3]="<<static_cast<int>(receiveBuffer[3]);
 
             receivedChunk->setDataType(dataType);
             receivedChunk->setLength(length);
@@ -977,18 +1017,24 @@ namespace RVR
     int Connection::checkDataHeader()
     {
         char* header = new char[RECEIVE_HEADER_LENGTH];
-        receive(header, RECEIVE_HEADER_LENGTH);
+        int bytesReceived = getReceivedData(&header, RECEIVE_HEADER_LENGTH);
 
-        for (int i=0;i<(RECEIVE_HEADER_LENGTH);i++)//minus 1 because last byte is the one carrying length/type info
+        if (bytesReceived > 0)
         {
-            if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
+            VLOG(1) << "header[0]="<<static_cast<int>(header[0]);
+            for (int i=0;i<(RECEIVE_HEADER_LENGTH);i++)//minus 1 because last byte is the one carrying length/type info
             {
-                VLOG(3) << "Incorrect data header -- RECEIVED:" << header << ", EXPECTED:"<< receiveHeaderValue[i];
-                return 0;
+                if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
+                {
+                    VLOG(1) << "Received data, but it's the incorrect header";
+                    return 0;
+                }
             }
+            VLOG(1) << "Correct data header";
+            return 1;
+        }else {
+            return 0;
         }
-        VLOG(2) << "Correct data header";
-        return 1;
     }
 
     int Connection::receive(char* buffer, int length)

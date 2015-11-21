@@ -19,6 +19,8 @@
 #include <unordered_map>
 #include <math.h>
 
+
+
 namespace RVR
 {
     const int COMMAND_LENGTH     = 4;
@@ -225,6 +227,8 @@ namespace RVR
         std::queue<NetworkChunk*> chunkQueue;
         std::unordered_map<int,ChunkBox*> chunkAccumulator;
         int currUID = 0;
+        char* udpData;
+        int udpReadPosition; //TODO - make a class out of this
     public:
         std::string connectionName;
         int initializeNewSocket(std::string connectionName, const char* ipAddressLocal, const char* ipAddressRemote, u_short port, ConnectionProtocol protocol);
@@ -243,6 +247,7 @@ namespace RVR
         int sendBitStream(char *bitStream, int length);
         void processDataOnBuffer();
         void processDataInMap();
+        int getReceivedData(char **buffer, int length);
         ReceiveType popChunkFromQueue(NetworkChunk *chunk);
     };
 
