@@ -466,6 +466,11 @@ namespace RVR
                         }
                         break;
                 }
+                {
+                    int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
+                    flags |= O_NONBLOCK;
+                    fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
+                }
                 break;
             case ConnectionInitType::LISTEN:
                 switch (protocol)
@@ -596,6 +601,11 @@ namespace RVR
         }
     }
 
+    int Connection::getFileDescriptor()
+    {
+        return this->fileDescriptor;
+    }
+
     int Connection::bindToSocket()
     {
         int successStatus = bind(this->fileDescriptor, (struct sockaddr *) &this->socketLocal, sizeof(this->socketLocal));
@@ -605,9 +615,9 @@ namespace RVR
             return 0;
         } else
         {
-            int flags = fcntl(this->fileDescriptor, F_GETFL, 0);
-            flags |= O_NONBLOCK;
-            fcntl(this->fileDescriptor, F_SETFL, flags); //set socket to non-blocking
+//            int flags = fcntl(this->fileDescriptor, F_GETFL, 0);
+//            flags |= O_NONBLOCK;
+//            fcntl(this->fileDescriptor, F_SETFL, flags); //set socket to non-blocking
             VLOG(2) << "Successfully bount to socket";
             return 1;
         }
@@ -833,15 +843,15 @@ namespace RVR
             switch (typeReceived)
             {
                 case ReceiveType::NETWORKCHUNK:
-                    VLOG(2) << "Received NetworkChunk. Pushing into queue";
+                    VLOG(3) << "Received NetworkChunk. Pushing into queue";
                     this->chunkQueue.push(receivedChunk);
                     break;
                 case ReceiveType::SEGMENT:
-                    VLOG(2) << "Received CbHeader or CbData";
+                    VLOG(3) << "Received CbHeader or CbData";
                     delete receivedChunk;
                     break;
                 case ReceiveType::NODATA:
-                    VLOG(2) << "No data received to push into queue";
+                    VLOG(3) << "No data received to push into queue";
                     delete receivedChunk;
                     break;
             }
@@ -853,6 +863,7 @@ namespace RVR
     int Connection::getReceivedData(char **buffer, int length)
     {
         int bytesReceived;
+        VLOG(2) << "In get received data";
         switch (this->protocol)
         {
             case ConnectionProtocol::TCP:
@@ -879,10 +890,11 @@ namespace RVR
     //received and the peer has performed an orderly shutdown, recv() shall return 0. Otherwise, -1 shall be returned to indicate error.
     //Last input argument for recv = 0 to indicate no flags
     {
+        VLOG(2) << "receiving chunk";
         int bytesReceived;
         if(this->protocol == ConnectionProtocol::UDP)
         {
-            int length = RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + 4;//+ MAX_SEG_LEN;
+            int length = RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + MAX_SEG_LEN; //4
             this->udpReadPosition = 0;
             char *tempData = new char[length];
             if(this->receive(tempData, length) == -1){return ReceiveType::NODATA;} //take fixed length UDP packet off buffer
@@ -891,7 +903,6 @@ namespace RVR
         if(this->checkDataHeader())
         {
             char* typeLengthInfo = new char[RECEIVE_TYPELENGTH_LENGTH];
-//            this->receive(typeLengthInfo, RECEIVE_TYPELENGTH_LENGTH);
             this->getReceivedData(&typeLengthInfo, RECEIVE_TYPELENGTH_LENGTH);
             VLOG(1) << "typeLengthInfo[0]="<<static_cast<int>(typeLengthInfo[0]);
             VLOG(1) << "typeLengthInfo[1]="<<static_cast<int>(typeLengthInfo[1]);
@@ -1017,6 +1028,7 @@ namespace RVR
     int Connection::checkDataHeader()
     {
         char* header = new char[RECEIVE_HEADER_LENGTH];
+        VLOG(2) << "Checking data header";
         int bytesReceived = getReceivedData(&header, RECEIVE_HEADER_LENGTH);
 
         if (bytesReceived > 0)
@@ -1045,10 +1057,13 @@ namespace RVR
         switch (this->protocol)
         {
             case ConnectionProtocol::TCP:
+                VLOG(2) << "Still TCP";
                 bytesReceived = recv(this->fileDescriptor, buffer, length, 0);
                 break;
             case ConnectionProtocol::UDP:
+                VLOG(2) << "Still UDP";
                 bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0,(struct sockaddr *) &this->socketRemote, &slen);
+                VLOG(2) << "Bytes received" << bytesReceived;
                 break;
         }
 

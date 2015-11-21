@@ -232,6 +232,7 @@ namespace RVR
         int udpReadPosition; //TODO - make a class out of this
     public:
         std::string connectionName;
+        int getFileDescriptor();
         int initializeNewSocket(std::string connectionName, const char* ipAddressLocal, const char* ipAddressRemote, u_short port, ConnectionProtocol protocol);
         int listenForConnection(int timeOut_ms);
         int initiateConnection();
