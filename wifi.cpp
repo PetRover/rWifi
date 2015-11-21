@@ -99,10 +99,10 @@ namespace RVR
             (this->data)[index*MAX_SEG_LEN+i]=(cbData->getData())[i];
         }
 
-        printf("Segments filled preupdate: %d", this->segmentsFilled);
+//        printf("Segments filled preupdate: %d", this->segmentsFilled);
         this->segmentsFilled++;
-        printf("Segments filled postupdate: %d", this->segmentsFilled);
-        printf("Total segments: %d", this->totalSegments);
+//        printf("Segments filled postupdate: %d", this->segmentsFilled);
+//        printf("Total segments: %d", this->totalSegments);
 
         //print all chunkBox
 //        for (int j = 0; j < totalBytes; j++){
@@ -116,8 +116,8 @@ namespace RVR
         this->segmentsFilled = 0;
         this->totalSegments = cbHeader->getNumSegments();
         this->totalBytes = cbHeader->getNumBytes();
-        printf("Total bytes: %d", this->getTotalBytes());
-        printf("Total segments: %d", this->getTotalSegments());
+//        printf("Total bytes: %d", this->getTotalBytes());
+//        printf("Total segments: %d", this->getTotalSegments());
 
         char *data = new char[totalSegments*MAX_SEG_LEN];
         this->data = data;
@@ -696,7 +696,7 @@ namespace RVR
 
     void Connection::makeStream(NetworkChunk *chunk)
     {
-        printf("Chunk is of length: %d", chunk->getLength());
+//        printf("Chunk is of length: %d", chunk->getLength());
         if (chunk->getLength() < MAX_SEG_LEN)
         {
             this->sendDataUnsegmented(chunk);
@@ -709,11 +709,11 @@ namespace RVR
 
     void Connection::sendDataSegmented(NetworkChunk *chunk)
     {
-        printf("Segmenting data\n");
+//        printf("Segmenting data\n");
 
         double chunkLength = chunk->getLength();
         double numSegments = ceil(chunkLength/MAX_SEG_LEN); //Determine number of segments
-        printf("numSegments %f\n", numSegments);
+//        printf("numSegments %f\n", numSegments);
 
         //create cbHeader -> turn into NC -> send NC -> delete cbHeader
         NetworkChunk *transmitChunk = new NetworkChunk(); //create NC to send
@@ -724,14 +724,14 @@ namespace RVR
         cbHeader->setNumBytes(chunkLength);
         cbHeader->setNumSegments(numSegments);
 
-        printf("sending UID: %d\n",cbHeader->getUID());
-        printf("sending NumBytes: %d\n",cbHeader->getNumBytes());
-        printf("sending NumSegments: %d\n",cbHeader->getNumSegments());
+//        printf("sending UID: %d\n",cbHeader->getUID());
+//        printf("sending NumBytes: %d\n",cbHeader->getNumBytes());
+//        printf("sending NumSegments: %d\n",cbHeader->getNumSegments());
 
         cbHeader->toNetworkChunk(transmitChunk); //turn header to NC
-        printf("verifying UID: %d\n",static_cast<int>((transmitChunk->getData())[0]));
-        printf("verifying NumBytes: %d\n",static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]));
-        printf("verifying NumSegments: %d\n",static_cast<int>(((transmitChunk->getData())[3]) << 8 | (transmitChunk->getData())[4]));
+//        printf("verifying UID: %d\n",static_cast<int>((transmitChunk->getData())[0]));
+//        printf("verifying NumBytes: %d\n",static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]));
+//        printf("verifying NumSegments: %d\n",static_cast<int>(((transmitChunk->getData())[3]) << 8 | (transmitChunk->getData())[4]));
 
         this->sendDataUnsegmented(transmitChunk); //send NC
 
@@ -748,12 +748,12 @@ namespace RVR
             cbData->setIndex(i);
             cbData->setData((chunk->getData())+MAX_SEG_LEN*i);
 
-            printf("sending UID: %d\n",cbData->getUID());
-            printf("sending index: %d\n",cbData->getIndex());
+//            printf("sending UID: %d\n",cbData->getUID());
+//            printf("sending index: %d\n",cbData->getIndex());
 
             cbData->toNetworkChunk(transmitChunk);
-            printf("verifying UID: %d\n",static_cast<int>((transmitChunk->getData())[0]));
-            printf("verifying index: %d\n",static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]));
+//            printf("verifying UID: %d\n",static_cast<int>((transmitChunk->getData())[0]));
+//            printf("verifying index: %d\n",static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]));
 
             this->sendDataUnsegmented(transmitChunk);
 
@@ -769,22 +769,22 @@ namespace RVR
     //The first input parameter is a pointer to the buffer where the message to be transmitted is stored.
     //The second input parameter is the message length.
     {
-        printf("Sending one segment of data\n");
+//        printf("Sending one segment of data\n");
         char bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength()];
         bzero(bitStream, sizeof(bitStream));
 
         //just for debugging
         if (chunk->getDataType() == DataType::CBHEADER){
-            printf("Sending CbHeader\n");
+//            printf("Sending CbHeader\n");
         }else if(chunk->getDataType() == DataType::CBDATA){
-            printf("Sending CbData\n");
+//            printf("Sending CbData\n");
         }
 
         bitStream[0] = receiveHeaderValue[0];
         bitStream[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 8));
         bitStream[2] = chunk->getLength(); //lsb of length
 
-        printf("sending length %d\n", static_cast<int>( ((bitStream[1] & 0x0f) << 8) | (bitStream[2])));
+//        printf("sending length %d\n", static_cast<int>( ((bitStream[1] & 0x0f) << 8) | (bitStream[2])));
 
         for (int i = 0; i < chunk->getLength(); i++){
             bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+i] = (chunk->getData())[i];
@@ -794,11 +794,11 @@ namespace RVR
 
         for (int i = 0; i < sizeof(bitStream); i++){
             VLOG(2) << static_cast<int>(bitStream[i]);
-            printf("bitstream %d %d \n",i,static_cast<int>(bitStream[i])); //remove
+//            printf("bitstream %d %d \n",i,static_cast<int>(bitStream[i])); //remove
         }
 
         VLOG(2) << "sent " << bytesSent << " bytes";
-        printf("sent %d bytes \n\n", (int)bytesSent);
+//        printf("sent %d bytes \n\n", (int)bytesSent);
         return bytesSent;
     }
 
@@ -899,7 +899,7 @@ namespace RVR
 
             DataType dataType = static_cast<DataType>(typeLengthInfo[0] >> 4);//typecast into dataType
             int length = (((typeLengthInfo[0] & 0x0f) << 8) | typeLengthInfo[1]);
-            printf("length: %d\n", length);
+//            printf("length: %d\n", length);
 
             char *receiveBuffer = new char[length];
 //            bytesReceived = this->receive(receiveBuffer, length);
