@@ -520,9 +520,15 @@ namespace RVR
         VLOG(3) << "Receiving data";
         Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
 
+        VLOG(2) << "Processing buffer data...";
         connectionPtr->processDataOnBuffer();
+        VLOG(2) << "[ DONE ] buffer data processed";
+        VLOG(2) << "Processing Map data...";
         connectionPtr->processDataInMap();
+        VLOG(2) << "[ DONE ] map data processed";
+        VLOG(2) << "Getting the next in line...";
         ReceiveType typeReceived = connectionPtr->popChunkFromQueue(chunk);
+        VLOG(2) << "[ DONE ] next in line was goten";
 
         return typeReceived;
     }
@@ -605,6 +611,10 @@ namespace RVR
             return 0;
         } else
         {
+            int flags = fcntl(this->fileDescriptor, F_GETFL, 0);
+            flags |= O_NONBLOCK;
+            fcntl(this->fileDescriptor, F_SETFL, flags); //set socket to non-blocking
+
             VLOG(2) << "Successfully initiated new socket!\nFileDescriptor: " << this->fileDescriptor <<
                     "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddressLocal << "\n";
             return 1;
@@ -985,12 +995,13 @@ namespace RVR
                 case DataType::CBDATA:
                 {
 
+
                     VLOG(2) << "Chunk received-> DataType: CBDATA Length:" << length;
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
                     ChunkBox *chunkBox = this->chunkAccumulator[cbData->getUID()]; //determine which chunkbox it should be put in based on UID
                     chunkBox->add(cbData); //add data to chunkBox
-
+                    VLOG_EVERY_N(100,1) << "GOT CDData with index: " << cbData->getIndex();
                     typeReceived = ReceiveType::SEGMENT;
                 }
                     break;
@@ -1075,15 +1086,21 @@ namespace RVR
         {
             case ConnectionProtocol::TCP:
                 bytesReceived = recv(this->fileDescriptor, buffer, length, 0);
+                if (bytesReceived != -1)
+                {
+                    VLOG_EVERY_N(100,1) << "GOT TCP DATA!";
+                }
                 break;
             case ConnectionProtocol::UDP:
                 VLOG(2) << "Trying to receive " << length << " bytes";
                 do
                 {
                     bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0, (struct sockaddr *) &this->socketRemote, &slen);
-//                    if (bytesReceived == -1)
-//                    { perror("recvfrom() error:"); }
-//                    VLOG(2) << "Bytes received " << bytesReceived;
+                    if (bytesReceived != -1)
+                    {
+                        VLOG_EVERY_N(100,1) << "GOT UDP DATA!";
+                    }
+
 
                 }while(bytesReceived != length);
                 break;
