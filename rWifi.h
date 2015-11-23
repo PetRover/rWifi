@@ -25,9 +25,10 @@ namespace RVR
 {
     const int COMMAND_LENGTH     = 4;
     const int STATUS_LENGTH      = 4;
-    const int CBHEADER_LENGTH    = 5;
+    const int CBHEADER_LENGTH    = 6;
     const int CBDATA_INFOLENGTH  = 3;
     const int CBDATA_DATALENGTH  = 500;
+
 
     enum class DataType
     //This enum holds the possible types of messages that can be sent. Each of these will be interpretted differently
@@ -37,7 +38,7 @@ namespace RVR
         CAMERA,
         TEXT,
         CBHEADER, //4
-        CBDATA,
+        CBDATA, //5
         NONE
     };
 
@@ -125,7 +126,7 @@ namespace RVR
     private:
         int UID;
         int index;
-        char *data;
+        char *data = new char[CBDATA_DATALENGTH];
     public:
         CbData() { }
         CbData(NetworkChunk *networkChunk); //constructor - takes NetworkChunk and creates CbData
