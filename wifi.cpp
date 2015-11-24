@@ -1034,9 +1034,9 @@ namespace RVR
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
                     ChunkBox *chunkBox = this->chunkAccumulator[cbData->getUID()]; //determine which chunkbox it should be put in based on UID
-//                    if(chunkBox->getIsFull() == 0){
+                    if(!chunkBox->getIsFull()){
                         chunkBox->add(cbData); //add data to chunkBox
-//                    }
+                    }
                     VLOG_EVERY_N(100,1) << "GOT CDData with index: " << cbData->getIndex();
                     typeReceived = ReceiveType::SEGMENT;
                 }
@@ -1058,8 +1058,7 @@ namespace RVR
             int filled = (it->second)->getSegmentsFilled();
             int total = (it->second)->getTotalSegments();
 
-//            if(!(it->second->getIsFull()) & (filled > 700))
-            if(filled > 700)
+            if(!(it->second->getIsFull()) & (filled > 1000))
             {
                 NetworkChunk *processedChunk = new NetworkChunk();
                 processedChunk->setDataType(DataType::CAMERA); //TODO - CBHEADER needs to keep track of what type of NC it should turn into - for now, likely camera
@@ -1067,9 +1066,9 @@ namespace RVR
                 processedChunk->setData((it->second->getData()));
                 VLOG(2) << "ChunkBox filled and put into NetworkChunk";
                 this->chunkQueue.push(processedChunk);
-//                it->second->setIsFull(1);
+                it->second->setIsFull(1);
                 //TODO - delete chunkBox
-//                (it->second)->setSegmentsFilled(0); //TODO - remove. Do right.
+
             }
         }
         return;
