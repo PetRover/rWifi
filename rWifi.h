@@ -166,7 +166,7 @@ namespace RVR
     {
     private:
         CommandType commandType; //what type of comamnd this is
-        char* commandData; //holds array of bytes that are passed in as data
+        char* commandData = new char[COMMAND_LENGTH];
         bool dataExists = 0;
     public:
         Command() { }

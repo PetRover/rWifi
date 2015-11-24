@@ -103,10 +103,6 @@ namespace RVR
 
         this->segmentsFilled++;
 
-        //print all chunkBox
-        for (int j = 0; j < totalBytes; j++){
-            VLOG(3) << "chunkBox[" << j << "]=" << (this->data)[j];
-        }
         return;
     }
 
@@ -118,8 +114,8 @@ namespace RVR
         VLOG(2) << "Total bytes: " << this->totalBytes;
         VLOG(2) << "Total segments: " << this->totalSegments;
 
-        char *data = new char[this->totalSegments*MAX_SEG_LEN];
-        this->data = data;
+        char *newData = new char[this->totalSegments*MAX_SEG_LEN];
+        this->data = newData;
 
         VLOG(2) << "Made chunkBox of size: " << this->totalSegments*MAX_SEG_LEN;
 
@@ -165,13 +161,14 @@ namespace RVR
     {
         this->commandType = static_cast<CommandType>((networkChunk.getData())[0] >> 4);
         VLOG(3) << "Creating Command: Type = " << (int) ((networkChunk.getData())[0] >> 4);
-        this->commandData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
+//        this->commandData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
 
-//        VLOG(3) << "Data = " << (int) this->commandData[0] << " " << (int) this->commandData[1] << " " <<
-//                (int) this->commandData[2] << " " << (int) this->commandData[3];
-        this->dataExists = (this->commandData[0] & 0x80) ? 1
-                                                         : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1, else 0
-//        VLOG(3) << "This command contains data: " << this->dataExists;
+        (this->commandData)[0] = (networkChunk.getData())[1];
+        (this->commandData)[1] = (networkChunk.getData())[2];
+        (this->commandData)[2] = (networkChunk.getData())[3];
+        (this->commandData)[3] = (networkChunk.getData())[4];
+
+        this->dataExists = (this->commandData[0] & 0x80) ? 1 : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1
     }
 
     NetworkChunk Command::toNetworkChunk()
@@ -360,15 +357,11 @@ namespace RVR
         this->UID = (networkChunk->getData())[0];
         this->numBytes = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[1])) << 16) | (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[2])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[3]));
         this->numSegments = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[4])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[5]));
-        unsigned int temp1 = (networkChunk->getData())[4] << 8 | (networkChunk->getData())[5];
-        unsigned short temp2 = (networkChunk->getData())[4] << 8 | (networkChunk->getData())[5];
-        VLOG(2) << "temp1: " << temp1;
-        VLOG(2) << "temp2: " << temp2;
     }
 
     void CbHeader::toNetworkChunk(NetworkChunk *newNetworkChunk)
     {
-        newNetworkChunk->setLength(CBHEADER_LENGTH + CBDATA_DATALENGTH - 1);
+        newNetworkChunk->setLength(CBHEADER_LENGTH + CBDATA_DATALENGTH - 3);//-1
         newNetworkChunk->setDataType(DataType::CBHEADER);
 
         char *dataToSend = new char[CBHEADER_LENGTH + CBDATA_DATALENGTH - 1];
@@ -520,15 +513,14 @@ namespace RVR
         VLOG(3) << "Receiving data";
         Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
 
-        VLOG(2) << "Processing buffer data...";
+        VLOG(3) << "Processing buffer data...";
         connectionPtr->processDataOnBuffer();
-        VLOG(2) << "[ DONE ] buffer data processed";
-        VLOG(2) << "Processing Map data...";
+        VLOG(3) << "[ DONE ] buffer data processed";
+        VLOG(3) << "Processing Map data...";
         connectionPtr->processDataInMap();
-        VLOG(2) << "[ DONE ] map data processed";
-        VLOG(2) << "Getting the next in line...";
+        VLOG(3) << "[ DONE ] map data processed";
+        VLOG(3) << "Getting the next in line...";
         ReceiveType typeReceived = connectionPtr->popChunkFromQueue(chunk);
-        VLOG(2) << "[ DONE ] next in line was goten";
 
         return typeReceived;
     }
@@ -611,10 +603,6 @@ namespace RVR
             return 0;
         } else
         {
-            int flags = fcntl(this->fileDescriptor, F_GETFL, 0);
-            flags |= O_NONBLOCK;
-            fcntl(this->fileDescriptor, F_SETFL, flags); //set socket to non-blocking
-
             VLOG(2) << "Successfully initiated new socket!\nFileDescriptor: " << this->fileDescriptor <<
                     "\nConnection name: " << this->connectionName << "\nIP Address: " << this->ipAddressLocal << "\n";
             return 1;
@@ -635,9 +623,6 @@ namespace RVR
             return 0;
         } else
         {
-//            int flags = fcntl(this->fileDescriptor, F_GETFL, 0);
-//            flags |= O_NONBLOCK;
-//            fcntl(this->fileDescriptor, F_SETFL, flags); //set socket to non-blocking
             VLOG(2) << "Successfully bount to socket";
             return 1;
         }
@@ -749,11 +734,6 @@ namespace RVR
         NetworkChunk *transmitChunk = new NetworkChunk(); //create NC to send
         CbHeader *cbHeader = new CbHeader();  //create cbHeader
 
-        if (this->currUID == MAX_UID){
-            this->currUID = 0;
-        }else{
-            (this->currUID)++;
-        }
         cbHeader->setUID(this->currUID);
         cbHeader->setNumBytes(chunkLength);
         cbHeader->setNumSegments(numSegments);
@@ -793,6 +773,12 @@ namespace RVR
 
             delete transmitChunk;
             delete cbData;
+        }
+
+        if (this->currUID == MAX_UID){
+            this->currUID = 0;
+        }else{
+            (this->currUID)++;
         }
 
         return;
@@ -962,16 +948,42 @@ namespace RVR
                     switch(dataType)
                     {
                         case DataType::COMMAND:
-                            VLOG(2) << "Chunk received-> DataType: COMMAND Length:" << length;
+                            switch(static_cast<CommandType>((receiveBuffer[0] & 0xf0) >> 4))
+                            {
+                                case CommandType::DRIVE_FORWARD:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: DRIVE_FORWARD -> Length:" << length;
+                                    break;
+                                case CommandType::DRIVE_BACKWARD:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: DRIVE_BACKWARD -> Length:" << length;
+                                    break;
+                                case CommandType::TURN_LEFT:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: TURN_LEFT -> Length:" << length;
+                                    break;
+                                case CommandType::TURN_RIGHT:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: TURN_RIGHT -> Length:" << length;
+                                    break;
+                                case CommandType::STOP_DRIVE:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: STOP_DRIVE -> Length:" << length;
+                                    break;
+                                case CommandType::START_STREAM:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: START_STREAM -> Length:" << length;
+                                    break;
+                                case CommandType::DISPENSE_TREAT:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: DISPENSE_TREAT -> Length:" << length;
+                                    break;
+                                case CommandType::FLIP_CAMPERA:
+                                    VLOG(2) << "NetworkChunk received-> DataType: COMMAND -> CommandType: FLIP_CAMPERA -> Length:" << length;
+                                    break;
+                            }
                             break;
                         case DataType::STATUS:
-                            VLOG(2) << "Chunk received-> DataType: STATUS Length:" << length;
+                            VLOG(2) << "NetworkChunk received-> DataType: STATUS Length:" << length;
                             break;
                         case DataType::CAMERA:
-                            VLOG(2) << "Chunk received-> DataType: CAMERA Length:" << length;
+                            VLOG(2) << "NetworkChunk received-> DataType: CAMERA Length:" << length;
                             break;
                         case DataType::TEXT:
-                            VLOG(2) << "Chunk received-> DataType: TEXT Length:" << length;
+                            VLOG(2) << "NetworkChunk received-> DataType: TEXT Length:" << length;
                             break;
                     }
                     typeReceived = ReceiveType::NETWORKCHUNK;
@@ -994,8 +1006,6 @@ namespace RVR
                     break;
                 case DataType::CBDATA:
                 {
-
-
                     VLOG(2) << "Chunk received-> DataType: CBDATA Length:" << length;
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
