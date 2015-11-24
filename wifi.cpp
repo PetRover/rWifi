@@ -7,7 +7,7 @@
 #define RECEIVE_HEADER_LENGTH        1
 #define RECEIVE_TYPELENGTH_LENGTH    2
 #define MAX_SEG_LEN                  500
-#define CHUNKBOX_FULL_CRITERIA       0.75
+#define CHUNKBOX_FULL_CRITERIA       0.50
 #define MAX_UID                      255
 
 int receiveHeaderValue[] = {67};
@@ -50,7 +50,7 @@ namespace RVR
 // ==============================================================
 // ChunkBox Member functions
 // ==============================================================
-    void ChunkBox::setSementsFilled(int segmentsFilledToSet)
+    void ChunkBox::setSegmentsFilled(int segmentsFilledToSet)
     {
         this->segmentsFilled = segmentsFilledToSet;
     }
@@ -70,7 +70,12 @@ namespace RVR
         this->data = dataToSet;
     }
 
-    int ChunkBox::getSementsFilled()
+    void ChunkBox::setIsFull(int isFullToSet)
+    {
+        this->isFull = isFullToSet;
+    }
+
+    int ChunkBox::getSegmentsFilled()
     {
         return this->segmentsFilled;
     }
@@ -90,18 +95,36 @@ namespace RVR
         return this->data;
     }
 
+    int ChunkBox::getIsFull()
+    {
+        return this->isFull;
+    }
+
     void ChunkBox::add(CbData *cbData)
     {
         int index = cbData->getIndex();
+        this->segmentsFilled++;
+        /*test*/
+        if(index == 0){
+            time (&(this->start));
+        }
+        if(index > 900){
+            time (&(this->end));
+            double dif = difftime (this->end,this->start);
+            VLOG(2) << "Total time" << dif;
+            VLOG(2) << "Total packets received " << segmentsFilled;
+        }
+        VLOG(2) << "index: " << index;
+        /*test*/
 
-        VLOG(2) << "Adding data into chunkBox at index: " << index;
+        VLOG(3) << "Adding data into chunkBox at index: " << index;
 
         for (int i = 0; i < MAX_SEG_LEN; i++) //copy data in
         {
             (this->data)[index*MAX_SEG_LEN+i]=(cbData->getData())[i];
         }
 
-        this->segmentsFilled++;
+
 
         return;
     }
@@ -111,6 +134,7 @@ namespace RVR
         this->segmentsFilled = 0;
         this->totalSegments = cbHeader->getNumSegments();
         this->totalBytes = cbHeader->getNumBytes();
+        this->isFull = 0;
         VLOG(2) << "Total bytes: " << this->totalBytes;
         VLOG(2) << "Total segments: " << this->totalSegments;
 
@@ -762,8 +786,8 @@ namespace RVR
             cbData->setIndex(i);
             cbData->setData((chunk->getData())+MAX_SEG_LEN*i);
 
-            VLOG(2) << "sending UID: " << cbData->getUID();
-            VLOG(2) << "sending index: " << cbData->getIndex();
+            VLOG(3) << "sending UID: " << cbData->getUID();
+            VLOG(3) << "sending index: " << cbData->getIndex();
 
             cbData->toNetworkChunk(transmitChunk);
             VLOG(3) << "verifying UID: " << static_cast<int>((transmitChunk->getData())[0]);
@@ -812,9 +836,9 @@ namespace RVR
 
         int bytesSent = this->sendBitStream(bitStream,sizeof(bitStream));
 
-        for (int i = 0; i < RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength(); i++){
-            VLOG(3) << "Sending bitstream[" << i << "]=" << static_cast<int>(bitStream[i]);
-        }
+//        for (int i = 0; i < RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength(); i++){
+//            VLOG(3) << "Sending bitstream[" << i << "]=" << static_cast<int>(bitStream[i]);
+//        }
 
         VLOG(3) << "sent " << bytesSent << " bytes";
         return bytesSent;
@@ -833,11 +857,11 @@ namespace RVR
             case ConnectionProtocol::UDP:
                 bytesSent = sendto(this->fileDescriptor, bitStream, length , 0, (struct sockaddr*) &this->socketRemote, slen);
 
-                VLOG(2) << "Sending length: " << length;
+                VLOG(3) << "Sending length: " << length;
 
-                for (int i = 0; i < 10; i++){
-                    VLOG(3) << "Byte[" << i << "]" << static_cast<int>(bitStream[i]);
-                }
+//                for (int i = 0; i < 10; i++){
+//                    VLOG(3) << "Byte[" << i << "]" << static_cast<int>(bitStream[i]);
+//                }
                 break;
         }
         return bytesSent;
@@ -886,10 +910,10 @@ namespace RVR
             case ConnectionProtocol::UDP:
                 *buffer = this->udpData + this->udpReadPosition;
 
-                for (int i = 0; i < length; i++)
-                {
-                    VLOG(3) << "buffer["<<i<<"]"<<static_cast<int>((*buffer)[i]);
-                }
+//                for (int i = 0; i < length; i++)
+//                {
+//                    VLOG(3) << "buffer["<<i<<"]"<<static_cast<int>((*buffer)[i]);
+//                }
 
                 VLOG(3) << "Reading from udpData array from position: " << this->udpReadPosition;
                 this->udpReadPosition += length;
@@ -1006,11 +1030,13 @@ namespace RVR
                     break;
                 case DataType::CBDATA:
                 {
-                    VLOG(2) << "Chunk received-> DataType: CBDATA Length:" << length;
+                    VLOG(3) << "Chunk received-> DataType: CBDATA Length:" << length;
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
                     ChunkBox *chunkBox = this->chunkAccumulator[cbData->getUID()]; //determine which chunkbox it should be put in based on UID
-                    chunkBox->add(cbData); //add data to chunkBox
+//                    if(chunkBox->getIsFull() == 0){
+                        chunkBox->add(cbData); //add data to chunkBox
+//                    }
                     VLOG_EVERY_N(100,1) << "GOT CDData with index: " << cbData->getIndex();
                     typeReceived = ReceiveType::SEGMENT;
                 }
@@ -1029,18 +1055,21 @@ namespace RVR
         //iterates through each chunkBox in the map
         for ( auto it = this->chunkAccumulator.begin(); it != this->chunkAccumulator.end(); ++it )
         {
-            int filled = (it->second)->getSementsFilled();
+            int filled = (it->second)->getSegmentsFilled();
             int total = (it->second)->getTotalSegments();
 
-            //if chunkBox is full enough to be turned into a NetworkChunk
-            if(filled/total > CHUNKBOX_FULL_CRITERIA)
+//            if(!(it->second->getIsFull()) & (filled > 700))
+            if(filled > 700)
             {
                 NetworkChunk *processedChunk = new NetworkChunk();
                 processedChunk->setDataType(DataType::CAMERA); //TODO - CBHEADER needs to keep track of what type of NC it should turn into - for now, likely camera
                 processedChunk->setLength((it->second->getTotalBytes()));
                 processedChunk->setData((it->second->getData()));
-
+                VLOG(2) << "ChunkBox filled and put into NetworkChunk";
                 this->chunkQueue.push(processedChunk);
+//                it->second->setIsFull(1);
+                //TODO - delete chunkBox
+//                (it->second)->setSegmentsFilled(0); //TODO - remove. Do right.
             }
         }
         return;
@@ -1102,23 +1131,23 @@ namespace RVR
                 }
                 break;
             case ConnectionProtocol::UDP:
-                VLOG(2) << "Trying to receive " << length << " bytes";
+                VLOG(3) << "Trying to receive " << length << " bytes";
                 do
                 {
                     bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0, (struct sockaddr *) &this->socketRemote, &slen);
-                    if (bytesReceived != -1)
-                    {
-                        VLOG_EVERY_N(100,1) << "GOT UDP DATA!";
-                    }
+//                    if (bytesReceived != -1)
+//                    {
+//                        VLOG_EVERY_N(100,1) << "GOT UDP DATA!";
+//                    }
 
 
                 }while(bytesReceived != length);
                 break;
         }
 
-        for (int i = 0; i < length;i++){
-            VLOG(3) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
-        }
+//        for (int i = 0; i < length;i++){
+//            VLOG(3) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
+//        }
 
         return bytesReceived;
     }

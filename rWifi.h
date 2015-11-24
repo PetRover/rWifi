@@ -18,7 +18,7 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <math.h>
-
+#include <time.h>
 
 
 namespace RVR
@@ -147,19 +147,23 @@ namespace RVR
         int totalSegments;
         int totalBytes;
         char* data;
+        time_t start,end; //for test
+        int isFull;
     public:
         ChunkBox() { }
         ChunkBox(CbHeader *cbHeader);
 
         void add(CbData *cbData);
-        void setSementsFilled(int segmentsFilledToSet);
+        void setSegmentsFilled(int segmentsFilledToSet);
         void setTotalSegments(int totalSegmentsToSet);
         void setTotalBytes(int totalBytesToSet);
         void setData(char *dataToSet);
-        int getSementsFilled();
+        void setIsFull(int isFullToSet);
+        int getSegmentsFilled();
         int getTotalSegments();
         int getTotalBytes();
         char* getData();
+        int getIsFull();
     };
 
     class Command
