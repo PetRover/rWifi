@@ -126,7 +126,7 @@ namespace RVR
     private:
         int UID;
         int index;
-        char *data = new char[CBDATA_DATALENGTH];
+        char *data;
     public:
         CbData() { }
         CbData(NetworkChunk *networkChunk); //constructor - takes NetworkChunk and creates CbData
@@ -147,12 +147,12 @@ namespace RVR
         int totalSegments;
         int totalBytes;
         char* data;
-        time_t start,end; //for test
         int isFull;
     public:
         ChunkBox() { }
         ChunkBox(CbHeader *cbHeader);
 
+        time_t start,end; //for test
         void add(CbData *cbData);
         void setSegmentsFilled(int segmentsFilledToSet);
         void setTotalSegments(int totalSegmentsToSet);

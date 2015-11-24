@@ -7,7 +7,7 @@
 #define RECEIVE_HEADER_LENGTH        1
 #define RECEIVE_TYPELENGTH_LENGTH    2
 #define MAX_SEG_LEN                  500
-#define CHUNKBOX_FULL_CRITERIA       0.50
+#define CHUNKBOX_FULL_PERCENT        60//75//60
 #define MAX_UID                      255
 
 int receiveHeaderValue[] = {67};
@@ -104,18 +104,6 @@ namespace RVR
     {
         int index = cbData->getIndex();
         this->segmentsFilled++;
-        /*test*/
-        if(index == 0){
-            time (&(this->start));
-        }
-        if(index > 900){
-            time (&(this->end));
-            double dif = difftime (this->end,this->start);
-            VLOG(2) << "Total time" << dif;
-            VLOG(2) << "Total packets received " << segmentsFilled;
-        }
-        VLOG(2) << "index: " << index;
-        /*test*/
 
         VLOG(3) << "Adding data into chunkBox at index: " << index;
 
@@ -131,17 +119,18 @@ namespace RVR
 
     ChunkBox::ChunkBox(CbHeader *cbHeader)
     {
+        time (&(this->start)); //For testing
         this->segmentsFilled = 0;
         this->totalSegments = cbHeader->getNumSegments();
         this->totalBytes = cbHeader->getNumBytes();
         this->isFull = 0;
-        VLOG(2) << "Total bytes: " << this->totalBytes;
-        VLOG(2) << "Total segments: " << this->totalSegments;
+        VLOG(3) << "Total bytes: " << this->totalBytes;
+        VLOG(3) << "Total segments: " << this->totalSegments;
 
         char *newData = new char[this->totalSegments*MAX_SEG_LEN];
         this->data = newData;
 
-        VLOG(2) << "Made chunkBox of size: " << this->totalSegments*MAX_SEG_LEN;
+        VLOG(3) << "Made chunkBox of size: " << this->totalSegments*MAX_SEG_LEN;
 
     }
 
@@ -388,7 +377,8 @@ namespace RVR
         newNetworkChunk->setLength(CBHEADER_LENGTH + CBDATA_DATALENGTH - 3);//-1
         newNetworkChunk->setDataType(DataType::CBHEADER);
 
-        char *dataToSend = new char[CBHEADER_LENGTH + CBDATA_DATALENGTH - 1];
+        char *dataToSend = new char[RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + CBHEADER_LENGTH + CBDATA_DATALENGTH - 1];
+        dataToSend += (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH); //pointer is placed 3 from the start, but space allocated 3 behind it.
 
         dataToSend[0] = this->UID;
         dataToSend[1] = ((this->numBytes) >> 16);
@@ -439,26 +429,43 @@ namespace RVR
     {
         this->UID = (networkChunk->getData())[0];
         this->index = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[1])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[2]));
-//        this->index = ((networkChunk->getData())[1]) << 8 | (networkChunk->getData())[2];
         this->data = networkChunk->getData() + 3;
     }
 
-    void CbData::toNetworkChunk(NetworkChunk *newNetworkChunk)//TODO - All of these functions need to pass the network chunk in.
+    void CbData::toNetworkChunk(NetworkChunk *newNetworkChunk)
     {
         newNetworkChunk->setLength(CBDATA_INFOLENGTH+CBDATA_DATALENGTH);
         newNetworkChunk->setDataType(DataType::CBDATA);
 
-        char *dataToSend = new char[CBDATA_INFOLENGTH+CBDATA_DATALENGTH];
-        dataToSend[0] = this->UID;
-        dataToSend[1] = (this->index) >> 8;
-        dataToSend[2] = (this->index) & 0xff;
+        //It's faster not to copy all of the data over and to append the info on to the front. This is done for every CbData except
+        //the first where we don't have permission to write into the 6 bytes of memory before the data
+        if (this->index == 0){
+            VLOG(2) << "Index is 0 so I'm copying data";
+            char *dataToSend = new char[RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + CBDATA_INFOLENGTH + CBDATA_DATALENGTH];
+            dataToSend += (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH);
 
-        for (int i = 0; i < MAX_SEG_LEN; i++)
-        {
-            dataToSend[i+3] = this->data[i];
+            dataToSend[0] = this->UID;
+            dataToSend[1] = (this->index) >> 8;
+            dataToSend[2] = (this->index) & 0xff;
+
+            for (int i = 0; i < MAX_SEG_LEN; i++)
+            {
+                dataToSend[i+3] = this->data[i];
+            }
+
+            newNetworkChunk->setData(dataToSend);
+        }else{
+            this->data = this->data-(CBDATA_INFOLENGTH); //change pointer back 3 (to location originally allocated);
+            for (int i = 0; i < CBDATA_INFOLENGTH; i++)
+            {
+                (this->getData())[0] = this->UID;
+                (this->getData())[1] = (this->index) >> 8;
+                (this->getData())[2] = (this->index) & 0xff;
+            }
+
+            newNetworkChunk->setData(this->getData());
         }
 
-        newNetworkChunk->setData(dataToSend);
         return;
     }
 
@@ -784,7 +791,7 @@ namespace RVR
 
             cbData->setUID(this->currUID);
             cbData->setIndex(i);
-            cbData->setData((chunk->getData())+MAX_SEG_LEN*i);
+            cbData->setData((chunk->getData())+MAX_SEG_LEN*i); //i can write over the 6 before it except for the first one. so that one needs to be set back 6
 
             VLOG(3) << "sending UID: " << cbData->getUID();
             VLOG(3) << "sending index: " << cbData->getIndex();
@@ -814,8 +821,7 @@ namespace RVR
     //The second input parameter is the message length.
     {
         VLOG(3) << "Sending one segment of data";
-        char bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength()];
-        bzero(bitStream, sizeof(bitStream));
+        int lengthToSend = RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength();
 
         //just for debugging
         if (chunk->getDataType() == DataType::CBHEADER){
@@ -824,21 +830,15 @@ namespace RVR
             VLOG(3) << "Sending CbData";
         }
 
-        bitStream[0] = receiveHeaderValue[0];
-        bitStream[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 8));
-        bitStream[2] = chunk->getLength(); //lsb of length
-
-        VLOG(3) << "sending length " << static_cast<int>( ((bitStream[1] & 0x0f) << 8) | (bitStream[2]));
-
-        for (int i = 0; i < chunk->getLength(); i++){
-            bitStream[RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+i] = (chunk->getData())[i];
+        chunk->setData(chunk->getData()-(RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH)); //change pointer back 3 (to location originally allocated);
+        for(int i = 0; i < (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH); i++) //loop of three
+        {
+            (chunk->getData())[0] = receiveHeaderValue[0];
+            (chunk->getData())[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 8));
+            (chunk->getData())[2] = chunk->getLength(); //lsb of length
         }
 
-        int bytesSent = this->sendBitStream(bitStream,sizeof(bitStream));
-
-//        for (int i = 0; i < RECEIVE_HEADER_LENGTH+RECEIVE_TYPELENGTH_LENGTH+chunk->getLength(); i++){
-//            VLOG(3) << "Sending bitstream[" << i << "]=" << static_cast<int>(bitStream[i]);
-//        }
+        int bytesSent = this->sendBitStream((chunk->getData()),lengthToSend);
 
         VLOG(3) << "sent " << bytesSent << " bytes";
         return bytesSent;
@@ -859,9 +859,6 @@ namespace RVR
 
                 VLOG(3) << "Sending length: " << length;
 
-//                for (int i = 0; i < 10; i++){
-//                    VLOG(3) << "Byte[" << i << "]" << static_cast<int>(bitStream[i]);
-//                }
                 break;
         }
         return bytesSent;
@@ -910,11 +907,6 @@ namespace RVR
             case ConnectionProtocol::UDP:
                 *buffer = this->udpData + this->udpReadPosition;
 
-//                for (int i = 0; i < length; i++)
-//                {
-//                    VLOG(3) << "buffer["<<i<<"]"<<static_cast<int>((*buffer)[i]);
-//                }
-
                 VLOG(3) << "Reading from udpData array from position: " << this->udpReadPosition;
                 this->udpReadPosition += length;
                 bytesReceived = length;
@@ -950,7 +942,8 @@ namespace RVR
             int length = (static_cast<int>(static_cast<unsigned char>(typeLengthInfo[0] & 0x0f)) << 8) | static_cast<int>(static_cast<unsigned char>(typeLengthInfo[1]));
             VLOG(3) << "length: " << length;
 
-            char *receiveBuffer = new char[length];
+            char *receiveBuffer = new char[RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + length];
+            receiveBuffer += (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH); //pointer is placed 3 from the start, but space allocated 3 behind it.
             bytesReceived = this->getReceivedData(&receiveBuffer, length);
             VLOG(3) << "receiveBuffer[0]="<<static_cast<int>(receiveBuffer[0]);
             VLOG(3) << "receiveBuffer[1]="<<static_cast<int>(receiveBuffer[1]);
@@ -1018,9 +1011,9 @@ namespace RVR
                     CbHeader *cbHeader = new CbHeader(receivedChunk); //pass CbHeader a networkChunk to create the header
                     ChunkBox *chunkBox = new ChunkBox(cbHeader);
 
-                    if (this->chunkAccumulator.count(cbHeader->getUID()) >
-                        0) //Entry with this UID already exists - must delete before inserting it (no replace for maps)
+                    if (this->chunkAccumulator.count(cbHeader->getUID()) > 0) //Entry with this UID already exists - must delete before inserting it
                     {
+                        delete this->chunkAccumulator[cbHeader->getUID()]; //delete the chunkBox stored here
                         this->chunkAccumulator.erase(cbHeader->getUID());
                     }
                     this->chunkAccumulator.insert({(cbHeader->getUID()), chunkBox});
@@ -1037,7 +1030,7 @@ namespace RVR
                     if(!chunkBox->getIsFull()){
                         chunkBox->add(cbData); //add data to chunkBox
                     }
-                    VLOG_EVERY_N(100,1) << "GOT CDData with index: " << cbData->getIndex();
+                    VLOG_EVERY_N(100,3) << "GOT CDData with index: " << cbData->getIndex();
                     typeReceived = ReceiveType::SEGMENT;
                 }
                     break;
@@ -1058,17 +1051,21 @@ namespace RVR
             int filled = (it->second)->getSegmentsFilled();
             int total = (it->second)->getTotalSegments();
 
-            if(!(it->second->getIsFull()) & (filled > 1000))
+            if(!(it->second->getIsFull()) & ((filled*100)/total > CHUNKBOX_FULL_PERCENT))
             {
                 NetworkChunk *processedChunk = new NetworkChunk();
                 processedChunk->setDataType(DataType::CAMERA); //TODO - CBHEADER needs to keep track of what type of NC it should turn into - for now, likely camera
                 processedChunk->setLength((it->second->getTotalBytes()));
                 processedChunk->setData((it->second->getData()));
-                VLOG(2) << "ChunkBox filled and put into NetworkChunk";
+                VLOG(2) << filled << " segments filled. Putting into NetworkChunk";
+
+                //timing
+                time (&(it->second->end));
+                double dif = difftime (it->second->end,it->second->start);
+                VLOG(3) << "Total time" << dif*1000;
+
                 this->chunkQueue.push(processedChunk);
                 it->second->setIsFull(1);
-                //TODO - delete chunkBox
-
             }
         }
         return;
@@ -1134,19 +1131,9 @@ namespace RVR
                 do
                 {
                     bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0, (struct sockaddr *) &this->socketRemote, &slen);
-//                    if (bytesReceived != -1)
-//                    {
-//                        VLOG_EVERY_N(100,1) << "GOT UDP DATA!";
-//                    }
-
-
                 }while(bytesReceived != length);
                 break;
         }
-
-//        for (int i = 0; i < length;i++){
-//            VLOG(3) << "receivedOffBuffer["<<i<<"] " <<(int)buffer[i];
-//        }
 
         return bytesReceived;
     }
