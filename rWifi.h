@@ -26,7 +26,7 @@ namespace RVR
     const int STATUS_LENGTH      = 4;
     const int CBHEADER_LENGTH    = 6;
     const int CBDATA_INFOLENGTH  = 3;
-    const int CBDATA_DATALENGTH  = 4000;
+    const int CBDATA_DATALENGTH  = 65000;
 
 
     enum class DataType

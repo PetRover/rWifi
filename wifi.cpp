@@ -5,8 +5,7 @@
 #include "../rCore/easylogging++.h"
 
 #define RECEIVE_HEADER_LENGTH        1
-#define RECEIVE_TYPELENGTH_LENGTH    2
-#define MAX_SEG_LEN                  4000
+#define RECEIVE_TYPELENGTH_LENGTH    3
 #define CHUNKBOX_FULL_PERCENT        75
 #define MAX_UID                      255
 
@@ -107,7 +106,7 @@ namespace RVR
 
         VLOG(3) << "Adding data into chunkBox at index: " << index;
 
-        std::copy ( (cbData->getData()), (cbData->getData())+MAX_SEG_LEN, (this->data)+index*MAX_SEG_LEN ); //Faster than a for loop for copying
+        std::copy ( (cbData->getData()), (cbData->getData())+CBDATA_DATALENGTH, (this->data)+index*CBDATA_DATALENGTH ); //Faster than a for loop for copying
 
         return;
     }
@@ -122,10 +121,10 @@ namespace RVR
         VLOG(3) << "Total bytes: " << this->totalBytes;
         VLOG(3) << "Total segments: " << this->totalSegments;
 
-        char *newData = new char[this->totalSegments*MAX_SEG_LEN];
+        char *newData = new char[this->totalSegments*CBDATA_DATALENGTH];
         this->data = newData;
 
-        VLOG(3) << "Made chunkBox of size: " << this->totalSegments*MAX_SEG_LEN;
+        VLOG(3) << "Made chunkBox of size: " << this->totalSegments*CBDATA_DATALENGTH;
 
     }
 
@@ -444,7 +443,7 @@ namespace RVR
             dataToSend[1] = (this->index) >> 8;
             dataToSend[2] = (this->index) & 0xff;
 
-            std::copy ( this->data, this->data+MAX_SEG_LEN, dataToSend+3 ); //Faster than a for loop for copying
+            std::copy ( this->data, this->data+CBDATA_DATALENGTH, dataToSend+3 ); //Faster than a for loop for copying
 
             newNetworkChunk->setData(dataToSend);
         }else{
@@ -748,7 +747,7 @@ namespace RVR
     void Connection::makeStream(NetworkChunk *chunk)
     {
         VLOG(3) << "Chunk is of length: " << chunk->getLength();
-        if (chunk->getLength() < MAX_SEG_LEN)
+        if (chunk->getLength() < CBDATA_DATALENGTH)
         {
             this->sendDataUnsegmented(chunk);
 
@@ -763,7 +762,7 @@ namespace RVR
         VLOG(3) << "Segmenting data";
 
         double chunkLength = chunk->getLength();
-        double numSegments = ceil(chunkLength/MAX_SEG_LEN); //Determine number of segments
+        double numSegments = ceil(chunkLength/CBDATA_DATALENGTH); //Determine number of segments
 
         //create cbHeader -> turn into NC -> send NC -> delete cbHeader
         NetworkChunk *transmitChunk = new NetworkChunk(); //create NC to send
@@ -795,7 +794,7 @@ namespace RVR
 
             cbData->setUID(this->currUID);
             cbData->setIndex(i);
-            cbData->setData((chunk->getData())+MAX_SEG_LEN*i); //i can write over the 6 before it except for the first one. so that one needs to be set back 6
+            cbData->setData((chunk->getData())+CBDATA_DATALENGTH*i); //i can write over the 6 before it except for the first one. so that one needs to be set back 6
 
             VLOG(3) << "sending UID: " << cbData->getUID();
             VLOG(3) << "sending index: " << cbData->getIndex();
@@ -838,8 +837,9 @@ namespace RVR
         for(int i = 0; i < (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH); i++) //loop of three
         {
             (chunk->getData())[0] = receiveHeaderValue[0];
-            (chunk->getData())[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 8));
-            (chunk->getData())[2] = chunk->getLength(); //lsb of length
+            (chunk->getData())[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 16));
+            (chunk->getData())[2] = (chunk->getLength() >> 8); //lsb of length
+            (chunk->getData())[2] = (chunk->getLength() & 0xff);
         }
 
         int bytesSent = this->sendBitStream((chunk->getData()),lengthToSend);
@@ -943,7 +943,7 @@ namespace RVR
             VLOG(3) << "Bytes received " << bytesReceived;
 
             DataType dataType = static_cast<DataType>(typeLengthInfo[0] >> 4);//typecast into dataType
-            int length = (static_cast<int>(static_cast<unsigned char>(typeLengthInfo[0] & 0x0f)) << 8) | static_cast<int>(static_cast<unsigned char>(typeLengthInfo[1]));
+            int length = (static_cast<int>(static_cast<unsigned char>(typeLengthInfo[0] & 0x0f)) << 16) | (static_cast<int>(static_cast<unsigned char>(typeLengthInfo[1])) << 8) | static_cast<int>(static_cast<unsigned char>(typeLengthInfo[2]));
             VLOG(3) << "length: " << length;
 
             char *receiveBuffer = new char[RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + length];
