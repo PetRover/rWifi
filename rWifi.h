@@ -152,6 +152,7 @@ namespace RVR
         ChunkBox() { }
         ChunkBox(CbHeader *cbHeader);
 
+        int segmentsReceived = 0; //TODO - remove when not needed. Just for test
         time_t start,end; //for test
         void add(CbData *cbData);
         void setSegmentsFilled(int segmentsFilledToSet);

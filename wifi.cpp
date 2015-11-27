@@ -7,7 +7,7 @@
 #define RECEIVE_HEADER_LENGTH        1
 #define RECEIVE_TYPELENGTH_LENGTH    2
 #define MAX_SEG_LEN                  500
-#define CHUNKBOX_FULL_PERCENT        60//75//60
+#define CHUNKBOX_FULL_PERCENT        75
 #define MAX_UID                      255
 
 int receiveHeaderValue[] = {67};
@@ -182,6 +182,7 @@ namespace RVR
         (this->commandData)[3] = (networkChunk.getData())[4];
 
         this->dataExists = (this->commandData[0] & 0x80) ? 1 : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1
+
     }
 
     NetworkChunk Command::toNetworkChunk()
@@ -319,6 +320,7 @@ namespace RVR
     {
         this->length = networkChunk.getLength();
         this->textMessage = networkChunk.getData();
+
     }
 
     NetworkChunk Text::toNetworkChunk()
@@ -440,7 +442,6 @@ namespace RVR
         //It's faster not to copy all of the data over and to append the info on to the front. This is done for every CbData except
         //the first where we don't have permission to write into the 6 bytes of memory before the data
         if (this->index == 0){
-            VLOG(2) << "Index is 0 so I'm copying data";
             char *dataToSend = new char[RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + CBDATA_INFOLENGTH + CBDATA_DATALENGTH];
             dataToSend += (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH);
 
@@ -475,7 +476,7 @@ namespace RVR
 
     int NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol)
     {
-        Connection *connectionPtr = new Connection();
+        Connection *connectionPtr = new Connection(); //never deleted - no instance in code where we end a connection
         connectionPtr->initializeNewSocket(connectionName, ipAddressLocal, ipAddressRemote, port, protocol);
         this->existingConnections.push_back(connectionPtr);//add the connection pointer to list of connection pointers
 
@@ -489,8 +490,13 @@ namespace RVR
                         {
                             return 0; //failed to initiateConnection
                         }
+                        {
+                            int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
+                            flags |= O_NONBLOCK;
+                            fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
+                        }
                         break;
-                    case ConnectionProtocol::UDP:
+                    case ConnectionProtocol::UDP: //BBB
                         if (!(connectionPtr->bindToSocket()))
                         {
                             return 0; //failed to bind to socket
@@ -502,6 +508,11 @@ namespace RVR
                 switch (protocol)
                 {
                     case ConnectionProtocol::TCP:
+                    {
+                        int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
+                        flags |= O_NONBLOCK;
+                        fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
+                    }
                         connectionPtr->listenForConnection(this->connectTimeout_ms);
                         break;
                     case ConnectionProtocol::UDP:
@@ -509,14 +520,16 @@ namespace RVR
                         {
                             return 0; //failed to bind to socket
                         }
+                        {
+                            int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
+                            flags |= O_NONBLOCK;
+                            fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
+                        }
                         break;
                 }
                 break;
 
         }
-        int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
-        flags |= O_NONBLOCK;
-        fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
         return 1;
     }
 
@@ -742,7 +755,7 @@ namespace RVR
 
     void Connection::makeStream(NetworkChunk *chunk)
     {
-        VLOG(2) << "Chunk is of length: " << chunk->getLength();
+        VLOG(3) << "Chunk is of length: " << chunk->getLength();
         if (chunk->getLength() < MAX_SEG_LEN)
         {
             this->sendDataUnsegmented(chunk);
@@ -755,11 +768,10 @@ namespace RVR
 
     void Connection::sendDataSegmented(NetworkChunk *chunk)
     {
-        VLOG(2) << "Segmenting data";
+        VLOG(3) << "Segmenting data";
 
         double chunkLength = chunk->getLength();
         double numSegments = ceil(chunkLength/MAX_SEG_LEN); //Determine number of segments
-        VLOG(2) << "numSegments: " << numSegments;
 
         //create cbHeader -> turn into NC -> send NC -> delete cbHeader
         NetworkChunk *transmitChunk = new NetworkChunk(); //create NC to send
@@ -770,8 +782,8 @@ namespace RVR
         cbHeader->setNumSegments(numSegments);
 
         VLOG(2) << "sending UID: " << cbHeader->getUID();
-        VLOG(2) << "sending NumBytes: " << cbHeader->getNumBytes();
-        VLOG(2) << "sending NumSegments: " << cbHeader->getNumSegments();
+        VLOG(3) << "sending NumBytes: " << cbHeader->getNumBytes();
+        VLOG(3) << "sending NumSegments: " << cbHeader->getNumSegments();
 
         cbHeader->toNetworkChunk(transmitChunk); //turn header to NC
         VLOG(3) << "verifying UID: " << static_cast<int>((transmitChunk->getData())[0]);
@@ -825,7 +837,7 @@ namespace RVR
 
         //just for debugging
         if (chunk->getDataType() == DataType::CBHEADER){
-            VLOG(2) << "Sending CbHeader";
+            VLOG(3) << "Sending CbHeader";
         }else if(chunk->getDataType() == DataType::CBDATA){
             VLOG(3) << "Sending CbData";
         }
@@ -856,7 +868,7 @@ namespace RVR
                 break;
             case ConnectionProtocol::UDP:
                 bytesSent = sendto(this->fileDescriptor, bitStream, length , 0, (struct sockaddr*) &this->socketRemote, slen);
-
+                if(bytesSent == -1){perror("sendto");}
                 VLOG(3) << "Sending length: " << length;
 
                 break;
@@ -1013,12 +1025,18 @@ namespace RVR
 
                     if (this->chunkAccumulator.count(cbHeader->getUID()) > 0) //Entry with this UID already exists - must delete before inserting it
                     {
-                        delete this->chunkAccumulator[cbHeader->getUID()]; //delete the chunkBox stored here
+//                        delete this->chunkAccumulator[cbHeader->getUID()]; //delete the chunkBox stored here
                         this->chunkAccumulator.erase(cbHeader->getUID());
                     }
                     this->chunkAccumulator.insert({(cbHeader->getUID()), chunkBox});
 
                     typeReceived = ReceiveType::SEGMENT;
+
+                    //just for test - print number of segments received in previous chunkBox
+                    if (cbHeader->getUID() > 0)
+                    {
+                        VLOG(2) << (this->chunkAccumulator[cbHeader->getUID()-1])->segmentsReceived << " segments";
+                    }
                 }
                     break;
                 case DataType::CBDATA:
@@ -1032,6 +1050,7 @@ namespace RVR
                     }
                     VLOG_EVERY_N(100,3) << "GOT CDData with index: " << cbData->getIndex();
                     typeReceived = ReceiveType::SEGMENT;
+                    chunkBox->segmentsReceived++; //just for test to see how many are received
                 }
                     break;
             }
@@ -1057,7 +1076,7 @@ namespace RVR
                 processedChunk->setDataType(DataType::CAMERA); //TODO - CBHEADER needs to keep track of what type of NC it should turn into - for now, likely camera
                 processedChunk->setLength((it->second->getTotalBytes()));
                 processedChunk->setData((it->second->getData()));
-                VLOG(2) << filled << " segments filled. Putting into NetworkChunk";
+                VLOG(3) << filled << " segments filled. Putting into NetworkChunk";
 
                 //timing
                 time (&(it->second->end));
