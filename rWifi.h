@@ -20,14 +20,13 @@
 #include <math.h>
 #include <time.h>
 
-
 namespace RVR
 {
     const int COMMAND_LENGTH     = 4;
     const int STATUS_LENGTH      = 4;
     const int CBHEADER_LENGTH    = 6;
     const int CBDATA_INFOLENGTH  = 3;
-    const int CBDATA_DATALENGTH  = 500;
+    const int CBDATA_DATALENGTH  = 4000;
 
 
     enum class DataType

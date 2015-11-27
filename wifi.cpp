@@ -6,7 +6,7 @@
 
 #define RECEIVE_HEADER_LENGTH        1
 #define RECEIVE_TYPELENGTH_LENGTH    2
-#define MAX_SEG_LEN                  500
+#define MAX_SEG_LEN                  4000
 #define CHUNKBOX_FULL_PERCENT        75
 #define MAX_UID                      255
 
@@ -107,12 +107,7 @@ namespace RVR
 
         VLOG(3) << "Adding data into chunkBox at index: " << index;
 
-        for (int i = 0; i < MAX_SEG_LEN; i++) //copy data in
-        {
-            (this->data)[index*MAX_SEG_LEN+i]=(cbData->getData())[i];
-        }
-
-
+        std::copy ( (cbData->getData()), (cbData->getData())+MAX_SEG_LEN, (this->data)+index*MAX_SEG_LEN ); //Faster than a for loop for copying
 
         return;
     }
@@ -449,10 +444,7 @@ namespace RVR
             dataToSend[1] = (this->index) >> 8;
             dataToSend[2] = (this->index) & 0xff;
 
-            for (int i = 0; i < MAX_SEG_LEN; i++)
-            {
-                dataToSend[i+3] = this->data[i];
-            }
+            std::copy ( this->data, this->data+MAX_SEG_LEN, dataToSend+3 ); //Faster than a for loop for copying
 
             newNetworkChunk->setData(dataToSend);
         }else{
@@ -1054,6 +1046,7 @@ namespace RVR
                 }
                     break;
             }
+
             return typeReceived; //data received
         }else{
             VLOG(3) << "Received data has incorrect header";
@@ -1151,6 +1144,7 @@ namespace RVR
                 {
                     bytesReceived = recvfrom(this->fileDescriptor, buffer, length, 0, (struct sockaddr *) &this->socketRemote, &slen);
                 }while(bytesReceived != length);
+                if(bytesReceived == -1){perror("recvfrom()");}
                 break;
         }
 
