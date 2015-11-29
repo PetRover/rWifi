@@ -540,6 +540,7 @@ namespace RVR
         {
             connectionPtr->makeStream(chunk);
         }
+        delete chunk; //delete the memory for the chunk allocated with new by the camera
         return;
     }
 
