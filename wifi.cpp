@@ -524,18 +524,22 @@ namespace RVR
     void NetworkManager::terminateConnection(std::string connectionName)
     {
         Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
-        int connectionPosition = getPositionByConnectionName(connectionName);
-        connectionPtr->terminateConnection();
-        existingConnections.erase(existingConnections.begin() + connectionPosition);
-
+        if (connectionPtr!= nullptr)
+        {
+            int connectionPosition = getPositionByConnectionName(connectionName);
+            connectionPtr->terminateConnection();
+            existingConnections.erase(existingConnections.begin() + connectionPosition);
+        }
         return;
     }
 
     void NetworkManager::sendData(std::string connectionName, NetworkChunk *chunk)
     {
         Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
-        connectionPtr->makeStream(chunk);
-
+        if (connectionPtr!= nullptr)
+        {
+            connectionPtr->makeStream(chunk);
+        }
         return;
     }
 
@@ -544,17 +548,20 @@ namespace RVR
     {
         VLOG(3) << "Receiving data";
         Connection *connectionPtr = getConnectionPtrByConnectionName(connectionName);
+        if (connectionPtr!= nullptr)
+        {
+            VLOG(3) << "Processing buffer data...";
+            connectionPtr->processDataOnBuffer();
+            VLOG(3) << "[ DONE ] buffer data processed";
+            VLOG(3) << "Processing Map data...";
+            connectionPtr->processDataInMap();
+            VLOG(3) << "[ DONE ] map data processed";
+            VLOG(3) << "Getting the next in line...";
+            ReceiveType typeReceived = connectionPtr->popChunkFromQueue(chunk);
 
-        VLOG(3) << "Processing buffer data...";
-        connectionPtr->processDataOnBuffer();
-        VLOG(3) << "[ DONE ] buffer data processed";
-        VLOG(3) << "Processing Map data...";
-        connectionPtr->processDataInMap();
-        VLOG(3) << "[ DONE ] map data processed";
-        VLOG(3) << "Getting the next in line...";
-        ReceiveType typeReceived = connectionPtr->popChunkFromQueue(chunk);
-
-        return typeReceived;
+            return typeReceived;
+        }
+        return ReceiveType::NODATA;
     }
 
     Connection *NetworkManager::getConnectionPtrByConnectionName(std::string connectionNameToFind)
@@ -569,6 +576,7 @@ namespace RVR
             }
         }
 
+        VLOG(2) << "Invalid connection name";
         return nullptr;
     }
 
