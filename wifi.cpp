@@ -448,12 +448,9 @@ namespace RVR
             newNetworkChunk->setData(dataToSend);
         }else{
             this->data = this->data-(CBDATA_INFOLENGTH); //change pointer back 3 (to location originally allocated);
-            for (int i = 0; i < CBDATA_INFOLENGTH; i++)
-            {
-                (this->getData())[0] = this->UID;
-                (this->getData())[1] = (this->index) >> 8;
-                (this->getData())[2] = (this->index) & 0xff;
-            }
+            (this->getData())[0] = this->UID;
+            (this->getData())[1] = (this->index) >> 8;
+            (this->getData())[2] = (this->index) & 0xff;
 
             newNetworkChunk->setData(this->getData());
         }
@@ -833,14 +830,11 @@ namespace RVR
             VLOG(3) << "Sending CbData";
         }
 
-        chunk->setData(chunk->getData()-(RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH)); //change pointer back 3 (to location originally allocated);
-        for(int i = 0; i < (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH); i++) //loop of three
-        {
-            (chunk->getData())[0] = receiveHeaderValue[0];
-            (chunk->getData())[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 16));
-            (chunk->getData())[2] = (chunk->getLength() >> 8); //lsb of length
-            (chunk->getData())[2] = (chunk->getLength() & 0xff);
-        }
+        chunk->setData(chunk->getData()-(RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH)); //change pointer back 3 (to location originally allocated)
+        (chunk->getData())[0] = receiveHeaderValue[0];
+        (chunk->getData())[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 16));
+        (chunk->getData())[2] = (chunk->getLength() >> 8); //lsb of length
+        (chunk->getData())[2] = (chunk->getLength() & 0xff);
 
         int bytesSent = this->sendBitStream((chunk->getData()),lengthToSend);
 
@@ -1037,7 +1031,11 @@ namespace RVR
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
                     ChunkBox *chunkBox = this->chunkAccumulator[cbData->getUID()]; //determine which chunkbox it should be put in based on UID
-                    if(!chunkBox->getIsFull()){
+                    if (chunkBox == nullptr)
+                    {
+                        VLOG(2) << "ChunkBox is nullptr. cbHeader not received";
+                    }
+                    else if(!chunkBox->getIsFull()){
                         chunkBox->add(cbData); //add data to chunkBox
                     }
                     VLOG_EVERY_N(100,3) << "GOT CDData with index: " << cbData->getIndex();
