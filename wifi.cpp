@@ -11,6 +11,9 @@
 
 int receiveHeaderValue[] = {67};
 
+const char*  ROVER_IP = "192.168.1.222";
+const char*  APP_IP = "192.168.1.3";
+
 namespace RVR
 {
 // ==============================================================

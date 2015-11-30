@@ -19,6 +19,9 @@
 #include <unordered_map>
 #include <math.h>
 
+extern const char*  ROVER_IP;
+extern const char*  APP_IP;
+
 namespace RVR
 {
     const int COMMAND_LENGTH     = 4;
@@ -71,7 +74,8 @@ namespace RVR
         STOP_DRIVE,
         START_STREAM,
         DISPENSE_TREAT,
-        FLIP_CAMPERA
+        FLIP_CAMPERA,
+        STOP_ALL
     };
 
     enum class StatusType
