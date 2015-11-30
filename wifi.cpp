@@ -143,7 +143,7 @@ namespace RVR
 
     ChunkBox::~ChunkBox()
     {
-        VLOG(2) << "Deleting chunkbox";
+        delete[] (this->data);
     }
 
 // ==============================================================
@@ -383,7 +383,8 @@ namespace RVR
 
     CbHeader::CbHeader(NetworkChunk *networkChunk)
     {
-        this->UID = (networkChunk->getData())[0];
+        this->UID = static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[0]));
+        VLOG(2) << "received CbHeader UID " << this->UID;
         this->numBytes = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[1])) << 16) | (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[2])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[3]));
         this->numSegments = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[4])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[5]));
 
@@ -446,7 +447,8 @@ namespace RVR
 
     CbData::CbData(NetworkChunk *networkChunk)
     {
-        this->UID = (networkChunk->getData())[0];
+//        this->UID = (networkChunk->getData())[0];
+        this->UID = static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[0]));
         this->index = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[1])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[2]));
         this->data = networkChunk->getData() + 3;
 
@@ -1060,7 +1062,7 @@ namespace RVR
 
                     if (this->chunkAccumulator.count(cbHeader->getUID()) > 0) //Entry with this UID already exists - must delete before inserting it
                     {
-//                        delete this->chunkAccumulator[cbHeader->getUID()]; //delete the chunkBox stored here
+                        delete this->chunkAccumulator[cbHeader->getUID()]; //delete the chunkBox stored here
                         this->chunkAccumulator.erase(cbHeader->getUID());
                     }
                     this->chunkAccumulator.insert({(cbHeader->getUID()), chunkBox});
@@ -1160,12 +1162,15 @@ namespace RVR
                 if(header[i] != receiveHeaderValue[i])//check that the header we received = header expected
                 {
                     VLOG(1) << "Received data, but it's the incorrect header";
+                    if(this->protocol == ConnectionProtocol::TCP){delete[] header;}
                     return 0;
                 }
             }
             VLOG(3) << "Correct data header";
+            if(this->protocol == ConnectionProtocol::TCP){delete[] header;}
             return 1;
         }else {
+            if(this->protocol == ConnectionProtocol::TCP){delete[] header;}
             return 0;
         }
     }
