@@ -18,7 +18,6 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <math.h>
-#include <time.h>
 
 namespace RVR
 {
@@ -91,6 +90,8 @@ namespace RVR
     public:
         NetworkChunk() { }
         NetworkChunk(DataType dataTypeToSet, int lengthToSet, char* dataToSet);
+        ~NetworkChunk();
+        int deallocateArray = 1;
         void setDataType(DataType dataTypeToSet);
         void setData(char* dataToSet);
         void setLength(int lengthToSet);
@@ -109,7 +110,7 @@ namespace RVR
     public:
         CbHeader() { }
         CbHeader(NetworkChunk *networkChunk); //constructor - takes NetworkChunk (of type CBHEADER) and creates CbHeader
-        void toNetworkChunk(NetworkChunk *newNetworkChunk); //export to NetworkChunk to be ready to send over network
+        NetworkChunk* toNetworkChunk(); //export to NetworkChunk to be ready to send over network
 
         void setUID(int UIDToSet);
         void setNumBytes(int numBytesToSet);
@@ -129,7 +130,7 @@ namespace RVR
     public:
         CbData() { }
         CbData(NetworkChunk *networkChunk); //constructor - takes NetworkChunk and creates CbData
-        void toNetworkChunk(NetworkChunk *newNetworkChunk); //export to NetworkChunk to be ready to send over network
+        NetworkChunk* toNetworkChunk(); //export to NetworkChunk to be ready to send over network
 
         void setUID(int UIDToSet);
         void setIndex(int indexToSet);
@@ -150,9 +151,9 @@ namespace RVR
     public:
         ChunkBox() { }
         ChunkBox(CbHeader *cbHeader);
+        ~ChunkBox();
 
         int segmentsReceived = 0; //TODO - remove when not needed. Just for test
-        time_t start,end; //for test
         void add(CbData *cbData);
         void setSegmentsFilled(int segmentsFilledToSet);
         void setTotalSegments(int totalSegmentsToSet);
@@ -174,8 +175,8 @@ namespace RVR
         bool dataExists = 0;
     public:
         Command() { }
-        Command(NetworkChunk networkChunk); //constructor - takes NetworkChunk and creates command
-        NetworkChunk toNetworkChunk(); //export to NetworkChunk to be ready to send over network
+        Command(NetworkChunk* networkChunk); //constructor - takes NetworkChunk and creates command
+        NetworkChunk* toNetworkChunk(); //export to NetworkChunk to be ready to send over network
 
         void setDataExists(bool dataExistsToSet);
         void setCommandType(CommandType commandTypeToSet);
@@ -194,7 +195,7 @@ namespace RVR
     public:
         Status() { }
         Status(NetworkChunk networkChunk);
-        NetworkChunk toNetworkChunk();
+        NetworkChunk* toNetworkChunk();
 
         void setDataExists(bool dataExistsToSet);
         void setStatusType(StatusType statusTypeToSet);
@@ -212,7 +213,7 @@ namespace RVR
     public:
         Text() { }
         Text(NetworkChunk networkChunk);
-        NetworkChunk toNetworkChunk();
+        NetworkChunk* toNetworkChunk();
 
         void setLength(int lengthToSet);
         void setTextMessage(char* textMessageToSet);
@@ -237,6 +238,7 @@ namespace RVR
         int udpReadPosition; //TODO - make a class out of this
     public:
         std::string connectionName;
+        char* getUdpData();
         int getFileDescriptor();
         int initializeNewSocket(std::string connectionName, const char* ipAddressLocal, const char* ipAddressRemote, u_short port, ConnectionProtocol protocol);
         int listenForConnection(int timeOut_ms);

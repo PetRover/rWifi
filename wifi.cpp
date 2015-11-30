@@ -46,6 +46,20 @@ namespace RVR
         return this->length;
     }
 
+    NetworkChunk::NetworkChunk(DataType dataTypeToSet, int lengthToSet, char *dataToSet)
+    {
+        this->dataType = dataTypeToSet;
+        this->length = lengthToSet;
+        this->data = dataToSet;
+    }
+
+    NetworkChunk::~NetworkChunk()
+    {
+        if(this->deallocateArray){
+            delete [] (this->data);
+        }
+    }
+
 // ==============================================================
 // ChunkBox Member functions
 // ==============================================================
@@ -113,7 +127,6 @@ namespace RVR
 
     ChunkBox::ChunkBox(CbHeader *cbHeader)
     {
-        time (&(this->start)); //For testing
         this->segmentsFilled = 0;
         this->totalSegments = cbHeader->getNumSegments();
         this->totalBytes = cbHeader->getNumBytes();
@@ -126,6 +139,11 @@ namespace RVR
 
         VLOG(3) << "Made chunkBox of size: " << this->totalSegments*CBDATA_DATALENGTH;
 
+    }
+
+    ChunkBox::~ChunkBox()
+    {
+        VLOG(2) << "Deleting chunkbox";
     }
 
 // ==============================================================
@@ -162,31 +180,35 @@ namespace RVR
         return this->commandData;
     }
 
-    Command::Command(NetworkChunk networkChunk)
+    Command::Command(NetworkChunk *networkChunk)
     //This is the constructor. It takes a networkChunk and turns it into a command
     //First byte of data is the command type - data starts after that byte
     {
-        this->commandType = static_cast<CommandType>((networkChunk.getData())[0] >> 4);
-        VLOG(3) << "Creating Command: Type = " << (int) ((networkChunk.getData())[0] >> 4);
-//        this->commandData = networkChunk.getData() + 1; //should be one byte after where the commandType was located
+        this->commandType = static_cast<CommandType>((networkChunk->getData())[0] >> 4);
+        VLOG(3) << "Creating Command: Type = " << (int) ((networkChunk->getData())[0] >> 4);
 
-        (this->commandData)[0] = (networkChunk.getData())[1];
-        (this->commandData)[1] = (networkChunk.getData())[2];
-        (this->commandData)[2] = (networkChunk.getData())[3];
-        (this->commandData)[3] = (networkChunk.getData())[4];
+        (this->commandData)[0] = (networkChunk->getData())[1];
+        (this->commandData)[1] = (networkChunk->getData())[2];
+        (this->commandData)[2] = (networkChunk->getData())[3];
+        (this->commandData)[3] = (networkChunk->getData())[4];
 
         this->dataExists = (this->commandData[0] & 0x80) ? 1 : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1
 
+        networkChunk->setData(networkChunk->getData()-(RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH));
+
+        delete[] networkChunk->getData();
     }
 
-    NetworkChunk Command::toNetworkChunk()
+    NetworkChunk* Command::toNetworkChunk()
     {
         NetworkChunk *newNetworkChunk = new NetworkChunk;
 
-        newNetworkChunk->setLength(COMMAND_LENGTH + 1);
+        newNetworkChunk->setLength(COMMAND_LENGTH + RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + 1);
         newNetworkChunk->setDataType(DataType::COMMAND);
 
-        char *dataToSend = new char[COMMAND_LENGTH + 1];
+        char *dataToSend = new char[COMMAND_LENGTH + RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH+ 1];
+        dataToSend += (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH); //pointer is placed 3 from the start, but space allocated 3 behind it.
+
         dataToSend[0] = (((static_cast<int>(this->getCommandType())) << 4) |
                          COMMAND_LENGTH); //first 4 bits are command type. last 4 are length
 
@@ -206,7 +228,7 @@ namespace RVR
 
         newNetworkChunk->setData(dataToSend);
 
-        return *newNetworkChunk;
+        return newNetworkChunk;
     }
 
 // ==============================================================
@@ -254,10 +276,9 @@ namespace RVR
         this->dataExists = (this->statusData[0] & 0x80) ? 1
                                                         : 0; //If dataExists bit (x) 0bx0000000 is a 1, then set dataExists = 1, else 0
         VLOG(2) << "This status contains data: " << this->dataExists;
-
     }
 
-    NetworkChunk Status::toNetworkChunk()
+    NetworkChunk* Status::toNetworkChunk()
     {
         NetworkChunk *newNetworkChunk = new NetworkChunk;
 
@@ -283,7 +304,7 @@ namespace RVR
 
         newNetworkChunk->setData(dataToSend);
 
-        return *newNetworkChunk;
+        return newNetworkChunk;
     }
 
 
@@ -314,10 +335,9 @@ namespace RVR
     {
         this->length = networkChunk.getLength();
         this->textMessage = networkChunk.getData();
-
     }
 
-    NetworkChunk Text::toNetworkChunk()
+    NetworkChunk* Text::toNetworkChunk()
     {
         NetworkChunk *newNetworkChunk = new NetworkChunk;
 
@@ -325,7 +345,7 @@ namespace RVR
         newNetworkChunk->setDataType(DataType::TEXT);
         newNetworkChunk->setData(this->textMessage);
 
-        return *newNetworkChunk;
+        return newNetworkChunk;
     }
 
 // ==============================================================
@@ -366,12 +386,15 @@ namespace RVR
         this->UID = (networkChunk->getData())[0];
         this->numBytes = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[1])) << 16) | (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[2])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[3]));
         this->numSegments = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[4])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[5]));
+
     }
 
-    void CbHeader::toNetworkChunk(NetworkChunk *newNetworkChunk)
+    NetworkChunk* CbHeader::toNetworkChunk()
     {
-        newNetworkChunk->setLength(CBHEADER_LENGTH + CBDATA_DATALENGTH - 3);//-1
-        newNetworkChunk->setDataType(DataType::CBHEADER);
+        NetworkChunk *transmitChunk = new NetworkChunk();
+
+        transmitChunk->setLength(CBHEADER_LENGTH + CBDATA_DATALENGTH - 3);//-1
+        transmitChunk->setDataType(DataType::CBHEADER);
 
         char *dataToSend = new char[RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + CBHEADER_LENGTH + CBDATA_DATALENGTH - 1];
         dataToSend += (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH); //pointer is placed 3 from the start, but space allocated 3 behind it.
@@ -383,9 +406,9 @@ namespace RVR
         dataToSend[4] = ((this->numSegments) >> 8);
         dataToSend[5] = (this->numSegments) & 0xff;
 
-        newNetworkChunk->setData(dataToSend);
+        transmitChunk->setData(dataToSend);
 
-        return;
+        return transmitChunk;
     }
 
 // ==============================================================
@@ -426,12 +449,17 @@ namespace RVR
         this->UID = (networkChunk->getData())[0];
         this->index = (static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[1])) << 8) | static_cast<int>(static_cast<unsigned char>((networkChunk->getData())[2]));
         this->data = networkChunk->getData() + 3;
+
+        VLOG(3) << "Received CbData UID " << this->UID;
+        VLOG(3) << "Received CbData index " << this->index;
     }
 
-    void CbData::toNetworkChunk(NetworkChunk *newNetworkChunk)
+    NetworkChunk* CbData::toNetworkChunk()
     {
-        newNetworkChunk->setLength(CBDATA_INFOLENGTH+CBDATA_DATALENGTH);
-        newNetworkChunk->setDataType(DataType::CBDATA);
+        NetworkChunk *transmitChunk = new NetworkChunk();
+
+        transmitChunk->setLength(CBDATA_INFOLENGTH+CBDATA_DATALENGTH);
+        transmitChunk->setDataType(DataType::CBDATA);
 
         //It's faster not to copy all of the data over and to append the info on to the front. This is done for every CbData except
         //the first where we don't have permission to write into the 6 bytes of memory before the data
@@ -445,17 +473,18 @@ namespace RVR
 
             std::copy ( this->data, this->data+CBDATA_DATALENGTH, dataToSend+3 ); //Faster than a for loop for copying
 
-            newNetworkChunk->setData(dataToSend);
+            transmitChunk->setData(dataToSend);
         }else{
-            this->data = this->data-(CBDATA_INFOLENGTH); //change pointer back 3 (to location originally allocated);
+            this->data = this->data-(CBDATA_INFOLENGTH+1); //change pointer back 3 (to location originally allocated);
             (this->getData())[0] = this->UID;
             (this->getData())[1] = (this->index) >> 8;
             (this->getData())[2] = (this->index) & 0xff;
 
-            newNetworkChunk->setData(this->getData());
+            transmitChunk->setData(this->getData());
+            transmitChunk->deallocateArray = 0;
         }
 
-        return;
+        return transmitChunk;
     }
 
 // ==============================================================
@@ -539,8 +568,13 @@ namespace RVR
         if (connectionPtr!= nullptr)
         {
             connectionPtr->makeStream(chunk);
+            if(connectionPtr->connectionName == "CAMERA")
+            {
+                chunk->deallocateArray = 0;
+                delete[] (connectionPtr->getUdpData());
+            }
+            delete chunk; //delete the memory for the chunk allocated with new by the camera
         }
-        delete chunk; //delete the memory for the chunk allocated with new by the camera
         return;
     }
 
@@ -598,13 +632,6 @@ namespace RVR
         return 0;
     }
 
-    NetworkChunk::NetworkChunk(DataType dataTypeToSet, int lengthToSet, char *dataToSet)
-    {
-        this->dataType = dataTypeToSet;
-        this->length = lengthToSet;
-        this->data = dataToSet;
-    }
-
     void NetworkManager::setConnectTimeout(int timeout_ms)
     {
         this->connectTimeout_ms = timeout_ms;
@@ -654,6 +681,12 @@ namespace RVR
     {
         return this->fileDescriptor;
     }
+
+    char* Connection::getUdpData()
+    {
+        return this->udpData;
+    }
+
 
     int Connection::bindToSocket()
     {
@@ -771,7 +804,6 @@ namespace RVR
         double numSegments = ceil(chunkLength/CBDATA_DATALENGTH); //Determine number of segments
 
         //create cbHeader -> turn into NC -> send NC -> delete cbHeader
-        NetworkChunk *transmitChunk = new NetworkChunk(); //create NC to send
         CbHeader *cbHeader = new CbHeader();  //create cbHeader
 
         cbHeader->setUID(this->currUID);
@@ -782,7 +814,7 @@ namespace RVR
         VLOG(3) << "sending NumBytes: " << cbHeader->getNumBytes();
         VLOG(3) << "sending NumSegments: " << cbHeader->getNumSegments();
 
-        cbHeader->toNetworkChunk(transmitChunk); //turn header to NC
+        NetworkChunk *transmitChunk = cbHeader->toNetworkChunk(); //turn header to NC
         VLOG(3) << "verifying UID: " << static_cast<int>((transmitChunk->getData())[0]);
         VLOG(3) << "verifying NumBytes: " << static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]);
         VLOG(3) << "verifying NumSegments: " << static_cast<int>(((transmitChunk->getData())[3]) << 8 | (transmitChunk->getData())[4]);
@@ -795,18 +827,17 @@ namespace RVR
         //create cbData -> turn into NC -> send NC -> delete cbData
         for (int i = 0; i < numSegments; i++)
         {
-            NetworkChunk *transmitChunk = new NetworkChunk(); //create NC to send
             CbData *cbData = new CbData();
 
             cbData->setUID(this->currUID);
             cbData->setIndex(i);
             cbData->setData((chunk->getData())+CBDATA_DATALENGTH*i); //i can write over the 6 before it except for the first one. so that one needs to be set back 6
 
-            VLOG(3) << "sending UID: " << cbData->getUID();
+            VLOG(3) << "sending CbData UID: " << cbData->getUID();
             VLOG(3) << "sending index: " << cbData->getIndex();
 
-            cbData->toNetworkChunk(transmitChunk);
-            VLOG(3) << "verifying UID: " << static_cast<int>((transmitChunk->getData())[0]);
+            NetworkChunk *transmitChunk = cbData->toNetworkChunk();
+            VLOG(3) << "verifying CbData UID: " << static_cast<int>((transmitChunk->getData())[0]);
             VLOG(3) << "verifying index: " << static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]);
 
             this->sendDataUnsegmented(transmitChunk);
@@ -843,7 +874,7 @@ namespace RVR
         (chunk->getData())[0] = receiveHeaderValue[0];
         (chunk->getData())[1] = (static_cast<int>(chunk->getDataType()) << 4 | (chunk->getLength() >> 16));
         (chunk->getData())[2] = (chunk->getLength() >> 8); //lsb of length
-        (chunk->getData())[2] = (chunk->getLength() & 0xff);
+        (chunk->getData())[3] = (chunk->getLength() & 0xff); //was working when this was 2?
 
         int bytesSent = this->sendBitStream((chunk->getData()),lengthToSend);
 
@@ -889,13 +920,20 @@ namespace RVR
                     this->chunkQueue.push(receivedChunk);
                     break;
                 case ReceiveType::SEGMENT:
-                    VLOG(3) << "Received CbHeader or CbData";
-                    delete receivedChunk;
+                {
+                    VLOG(3) << "Received CbHeader or CbData SEGMENT";
+                    receivedChunk->setData(receivedChunk->getData() - (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH));
+                    delete receivedChunk; //should be data to delete filled in then turned into CBheader
+                    VLOG(3) << "deleted unusued chunk";
                     break;
+                }
                 case ReceiveType::NODATA:
+                {
                     VLOG(3) << "No data received to push into queue";
+                    receivedChunk->deallocateArray = 0;
                     delete receivedChunk;
                     break;
+                }
             }
             receivedCount++;
 //        } while (typeReceived != ReceiveType::NODATA);//TODO - we get stuck in this loop
@@ -939,14 +977,15 @@ namespace RVR
         }
         if(this->checkDataHeader())
         {
-            char* typeLengthInfo = new char[RECEIVE_TYPELENGTH_LENGTH];
-            bytesReceived = this->getReceivedData(&typeLengthInfo, RECEIVE_TYPELENGTH_LENGTH);
-            VLOG(3) << "typeLengthInfo[0]="<<static_cast<int>(typeLengthInfo[0]);
-            VLOG(3) << "typeLengthInfo[1]="<<static_cast<int>(typeLengthInfo[1]);
+            char typeLengthInfo[RECEIVE_TYPELENGTH_LENGTH];
+            char* typeLengthInfoPtr = typeLengthInfo;
+            bytesReceived = this->getReceivedData(&typeLengthInfoPtr, RECEIVE_TYPELENGTH_LENGTH);
+            VLOG(3) << "typeLengthInfo[0]="<<static_cast<int>(typeLengthInfoPtr[0]);
+            VLOG(3) << "typeLengthInfo[1]="<<static_cast<int>(typeLengthInfoPtr[1]);
             VLOG(3) << "Bytes received " << bytesReceived;
 
-            DataType dataType = static_cast<DataType>(typeLengthInfo[0] >> 4);//typecast into dataType
-            int length = (static_cast<int>(static_cast<unsigned char>(typeLengthInfo[0] & 0x0f)) << 16) | (static_cast<int>(static_cast<unsigned char>(typeLengthInfo[1])) << 8) | static_cast<int>(static_cast<unsigned char>(typeLengthInfo[2]));
+            DataType dataType = static_cast<DataType>(typeLengthInfoPtr[0] >> 4);//typecast into dataType
+            int length = (static_cast<int>(static_cast<unsigned char>(typeLengthInfoPtr[0] & 0x0f)) << 16) | (static_cast<int>(static_cast<unsigned char>(typeLengthInfoPtr[1])) << 8) | static_cast<int>(static_cast<unsigned char>(typeLengthInfoPtr[2]));
             VLOG(3) << "length: " << length;
 
             char *receiveBuffer = new char[RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH + length];
@@ -959,6 +998,7 @@ namespace RVR
 
             receivedChunk->setDataType(dataType);
             receivedChunk->setLength(length);
+
             receivedChunk->setData(receiveBuffer);
 
             //fill in networkChunk or create chunkBox(CbHeader) or fill in chunkBox(CbData)
@@ -1078,11 +1118,6 @@ namespace RVR
                 processedChunk->setData((it->second->getData()));
                 VLOG(3) << filled << " segments filled. Putting into NetworkChunk";
 
-                //timing
-                time (&(it->second->end));
-                double dif = difftime (it->second->end,it->second->start);
-                VLOG(3) << "Total time" << dif*1000;
-
                 this->chunkQueue.push(processedChunk);
                 it->second->setIsFull(1);
             }
@@ -1095,10 +1130,14 @@ namespace RVR
         VLOG(3) << "Attempting to pop chunk from queue";
         if (!this->chunkQueue.empty())//if there's something in the queue (it's not empty)
         {
-            NetworkChunk* tempChunk = new NetworkChunk; //TODO - implement smarter solution so that data popped gets stored in chunk
+            NetworkChunk* tempChunk;
             tempChunk = this->chunkQueue.front();    //access the oldest chunk in the queue
             *chunk = *tempChunk;
+
+            tempChunk->setData(tempChunk->getData()-(RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH));
+            tempChunk->deallocateArray = 0;
             delete tempChunk;
+
             this->chunkQueue.pop();//delete the oldest chunk from the queue
             return ReceiveType::NETWORKCHUNK;
         } else{
