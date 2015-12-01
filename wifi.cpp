@@ -496,7 +496,7 @@ namespace RVR
 // Connection NetworkManager Member functions
 // ==============================================================
 
-    int NetworkManager::initializeNewConnection(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol)
+    int NetworkManager::initializeNewConnectionAndConnect(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol)
     {
         Connection *connectionPtr = new Connection(); //never deleted - no instance in code where we end a connection
         connectionPtr->initializeNewSocket(connectionName, ipAddressLocal, ipAddressRemote, port, protocol);
@@ -508,9 +508,7 @@ namespace RVR
                 switch (protocol)
                 {
                     case ConnectionProtocol::TCP:
-                        if (!(connectionPtr->initiateConnection()))
-                        {
-                            return 0; //failed to initiateConnection
+                        while(!(connectionPtr->initiateConnection())){
                         }
                         {
                             int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
@@ -558,6 +556,7 @@ namespace RVR
 
         }
         return 1;
+
     }
 
     void NetworkManager::terminateConnection(std::string connectionName)
