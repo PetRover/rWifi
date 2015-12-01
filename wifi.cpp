@@ -6,13 +6,13 @@
 
 #define RECEIVE_HEADER_LENGTH        1
 #define RECEIVE_TYPELENGTH_LENGTH    3
-#define CHUNKBOX_FULL_PERCENT        75
+#define CHUNKBOX_FULL_PERCENT        100
 #define MAX_UID                      255
 
 int receiveHeaderValue[] = {67};
 
 const char*  ROVER_IP = "192.168.1.222";
-const char*  APP_IP = "192.168.1.3";
+const char*  APP_IP = "192.168.1.6";
 
 namespace RVR
 {
@@ -523,6 +523,11 @@ namespace RVR
                         {
                             return 0; //failed to bind to socket
                         }
+                        {
+                            int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
+                            flags |= O_NONBLOCK;
+                            fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
+                        }
                         break;
                 }
                 break;
@@ -824,31 +829,35 @@ namespace RVR
         VLOG(3) << "verifying NumBytes: " << static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]);
         VLOG(3) << "verifying NumSegments: " << static_cast<int>(((transmitChunk->getData())[3]) << 8 | (transmitChunk->getData())[4]);
 
-        this->sendDataUnsegmented(transmitChunk); //send NC
+        int cbHeaderSent = this->sendDataUnsegmented(transmitChunk); //send NC
 
         delete cbHeader;
         delete transmitChunk;
 
-        //create cbData -> turn into NC -> send NC -> delete cbData
-        for (int i = 0; i < numSegments; i++)
-        {
-            CbData *cbData = new CbData();
+        if (cbHeaderSent != -1){
+            //create cbData -> turn into NC -> send NC -> delete cbData
+            int cbDataSent;
+            for (int i = 0; i < numSegments; i++)
+            {
+                CbData *cbData = new CbData();
 
-            cbData->setUID(this->currUID);
-            cbData->setIndex(i);
-            cbData->setData((chunk->getData())+CBDATA_DATALENGTH*i); //i can write over the 6 before it except for the first one. so that one needs to be set back 6
+                cbData->setUID(this->currUID);
+                cbData->setIndex(i);
+                cbData->setData((chunk->getData())+CBDATA_DATALENGTH*i); //i can write over the 6 before it except for the first one. so that one needs to be set back 6
 
-            VLOG(3) << "sending CbData UID: " << cbData->getUID();
-            VLOG(3) << "sending index: " << cbData->getIndex();
+                VLOG(3) << "sending CbData UID: " << cbData->getUID();
+                VLOG(3) << "sending index: " << cbData->getIndex();
 
-            NetworkChunk *transmitChunk = cbData->toNetworkChunk();
-            VLOG(3) << "verifying CbData UID: " << static_cast<int>((transmitChunk->getData())[0]);
-            VLOG(3) << "verifying index: " << static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]);
+                NetworkChunk *transmitChunk = cbData->toNetworkChunk();
+                VLOG(3) << "verifying CbData UID: " << static_cast<int>((transmitChunk->getData())[0]);
+                VLOG(3) << "verifying index: " << static_cast<int>(((transmitChunk->getData())[1]) << 8 | (transmitChunk->getData())[2]);
 
-            this->sendDataUnsegmented(transmitChunk);
+                cbDataSent = this->sendDataUnsegmented(transmitChunk);
 
-            delete transmitChunk;
-            delete cbData;
+                delete transmitChunk;
+                delete cbData;
+                if (cbDataSent == -1){break;}
+            }
         }
 
         if (this->currUID == MAX_UID){
@@ -891,6 +900,10 @@ namespace RVR
     {
         ssize_t bytesSent;
         socklen_t slen = sizeof(this->socketRemote);
+        int timesTried = 0;
+
+//        std::fstream csvFile;
+//        csvFile.open ("/home/debian/rover/sendLoops.csv", std::fstream::in | std::fstream::out | std::fstream::app);
 
         switch (this->protocol)
         {
@@ -898,8 +911,17 @@ namespace RVR
                 bytesSent = send(this->fileDescriptor, bitStream, length, 0);
                 break;
             case ConnectionProtocol::UDP:
-                bytesSent = sendto(this->fileDescriptor, bitStream, length , 0, (struct sockaddr*) &this->socketRemote, slen);
-                if(bytesSent == -1){perror("sendto");}
+//                for (int i = 0; i < 16000; i++)
+//                {
+                do{
+                    bytesSent = sendto(this->fileDescriptor, bitStream, length, 0, (struct sockaddr *) &this->socketRemote, slen);
+                    timesTried++;
+//                }
+                }while(bytesSent == -1);
+                VLOG(3) <<"Tried to call sento function " << timesTried << " times";
+//                csvFile << timesTried << "\r\n";
+//                csvFile.close();
+
                 VLOG(3) << "Sending length: " << length;
 
                 break;
@@ -926,10 +948,9 @@ namespace RVR
                     break;
                 case ReceiveType::SEGMENT:
                 {
-                    VLOG(3) << "Received CbHeader or CbData SEGMENT";
+                    VLOG(2) << "Received CbHeader or CbData SEGMENT";
                     receivedChunk->setData(receivedChunk->getData() - (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH));
                     delete receivedChunk; //should be data to delete filled in then turned into CBheader
-                    VLOG(3) << "deleted unusued chunk";
                     break;
                 }
                 case ReceiveType::NODATA:
@@ -1075,26 +1096,32 @@ namespace RVR
                     //just for test - print number of segments received in previous chunkBox
                     if (cbHeader->getUID() > 0)
                     {
-                        VLOG(2) << (this->chunkAccumulator[cbHeader->getUID()-1])->segmentsReceived << " segments";
+                        if ((this->chunkAccumulator[cbHeader->getUID()-1]) != nullptr)
+                        {
+                            VLOG(2) << (this->chunkAccumulator[cbHeader->getUID()-1])->segmentsReceived << " segments";
+                        }
                     }
                 }
                     break;
                 case DataType::CBDATA:
                 {
-                    VLOG(3) << "Chunk received-> DataType: CBDATA Length:" << length;
+                    VLOG(2) << "Chunk received-> DataType: CBDATA Length:" << length;
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
+                    VLOG(2) << "After create new CbData";
                     ChunkBox *chunkBox = this->chunkAccumulator[cbData->getUID()]; //determine which chunkbox it should be put in based on UID
+                    VLOG(2) << " After create new chunkbox";
                     if (chunkBox == nullptr)
                     {
                         VLOG(2) << "ChunkBox is nullptr. cbHeader not received";
+                    }else{
+                        if(!chunkBox->getIsFull())
+                        {
+                            chunkBox->add(cbData); //add data to chunkBox
+                        }
+                        chunkBox->segmentsReceived++; //just for test to see how many are received
                     }
-                    else if(!chunkBox->getIsFull()){
-                        chunkBox->add(cbData); //add data to chunkBox
-                    }
-                    VLOG_EVERY_N(100,3) << "GOT CDData with index: " << cbData->getIndex();
                     typeReceived = ReceiveType::SEGMENT;
-                    chunkBox->segmentsReceived++; //just for test to see how many are received
                 }
                     break;
             }
@@ -1112,19 +1139,20 @@ namespace RVR
         //iterates through each chunkBox in the map
         for ( auto it = this->chunkAccumulator.begin(); it != this->chunkAccumulator.end(); ++it )
         {
-            int filled = (it->second)->getSegmentsFilled();
-            int total = (it->second)->getTotalSegments();
+            if((it->second)!=nullptr){
+                int filled = (it->second)->getSegmentsFilled();
+                int total = (it->second)->getTotalSegments();
+                if(!(it->second->getIsFull()) & ((filled*100)/total >= CHUNKBOX_FULL_PERCENT))
+                {
+                    NetworkChunk *processedChunk = new NetworkChunk();
+                    processedChunk->setDataType(DataType::CAMERA); //TODO - CBHEADER needs to keep track of what type of NC it should turn into - for now, likely camera
+                    processedChunk->setLength((it->second->getTotalBytes()));
+                    processedChunk->setData((it->second->getData()));
+                    VLOG(3) << filled << " segments filled. Putting into NetworkChunk";
 
-            if(!(it->second->getIsFull()) & ((filled*100)/total > CHUNKBOX_FULL_PERCENT))
-            {
-                NetworkChunk *processedChunk = new NetworkChunk();
-                processedChunk->setDataType(DataType::CAMERA); //TODO - CBHEADER needs to keep track of what type of NC it should turn into - for now, likely camera
-                processedChunk->setLength((it->second->getTotalBytes()));
-                processedChunk->setData((it->second->getData()));
-                VLOG(3) << filled << " segments filled. Putting into NetworkChunk";
-
-                this->chunkQueue.push(processedChunk);
-                it->second->setIsFull(1);
+                    this->chunkQueue.push(processedChunk);
+                    it->second->setIsFull(1);
+                }
             }
         }
         return;

@@ -241,6 +241,7 @@ namespace RVR
         char* udpData;
         int udpReadPosition; //TODO - make a class out of this
     public:
+        int histogramData[1000];
         std::string connectionName;
         char* getUdpData();
         int getFileDescriptor();
