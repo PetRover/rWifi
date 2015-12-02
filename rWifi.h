@@ -18,7 +18,7 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <math.h>
-#include <chrono>
+//#include <chrono>
 
 extern const char*  ROVER_IP;
 extern const char*  APP_IP;
@@ -65,11 +65,11 @@ namespace RVR
         NODATA
     };
 
-    enum class ConnectionStatus
-    {
-        CONNECTED,
-        NOT_CONNECTED
-    };
+//    enum class ConnectionStatus
+//    {
+//        CONNECTED,
+//        NOT_CONNECTED
+//    };
 
     enum class CommandType
     //This enum holds the list of different commands that Rover can execute
@@ -280,12 +280,12 @@ namespace RVR
         Connection* getConnectionPtrByConnectionName(std::string connectionNameToFind);
         int getPositionByConnectionName(std::string connectionNameToFind);
     public:
-        std::chrono::high_resolution_clock::time_point timeOfLastHeartBeatReceived = std::chrono::high_resolution_clock::now();
-        std::chrono::high_resolution_clock::time_point timeOfLastHeartBeatSent = std::chrono::high_resolution_clock::now();
+//        std::chrono::high_resolution_clock::time_point timeOfLastHeartBeatReceived = std::chrono::high_resolution_clock::now();
+//        std::chrono::high_resolution_clock::time_point timeOfLastHeartBeatSent = std::chrono::high_resolution_clock::now();
         int initializeNewConnectionAndConnect(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol);
-        void sendHeartBeat();
-        ConnectionStatus checkConnectionStatus();
-        void removeConnections();
+//        void sendHeartBeat();
+//        ConnectionStatus checkConnectionStatus();
+//        void removeConnections();
         void setConnectTimeout(int timeout_ms);
 
         void terminateConnection(std::string connectionName);

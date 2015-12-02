@@ -11,7 +11,7 @@
 
 int receiveHeaderValue[] = {67};
 
-const char*  ROVER_IP = "192.168.1.8";
+const char*  ROVER_IP = "192.168.1.5";
 const char*  APP_IP = "192.168.1.6";
 
 namespace RVR
@@ -508,7 +508,7 @@ namespace RVR
                 switch (protocol)
                 {
                     case ConnectionProtocol::TCP:
-                        while(!(connectionPtr->initiateConnection()));
+                        while(!(connectionPtr->initiateConnection())){}
                         {
                             int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
                             flags |= O_NONBLOCK;
@@ -520,11 +520,11 @@ namespace RVR
                         {
                             return 0; //failed to bind to socket
                         }
-                        {
-                            int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
-                            flags |= O_NONBLOCK;
-                            fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
-                        }
+//                        {
+//                            int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
+//                            flags |= O_NONBLOCK;
+//                            fcntl(connectionPtr->getFileDescriptor(), F_SETFL, flags); //set socket to non-blocking
+//                        }
                         break;
                 }
                 break;
@@ -557,80 +557,80 @@ namespace RVR
         return 1;
     }
 
-    void NetworkManager::removeConnections()
-    {
-        int cameraPositionInVector = this->getPositionByConnectionName("CAMERA");
-        int commandsPositionInVector = this->getPositionByConnectionName("COMMANDS");
-        int heartbeatPositionInVector = this->getPositionByConnectionName("STATUS");
+//    void NetworkManager::removeConnections()
+//    {
+//        int cameraPositionInVector = this->getPositionByConnectionName("CAMERA");
+//        int commandsPositionInVector = this->getPositionByConnectionName("COMMANDS");
+//        int heartbeatPositionInVector = this->getPositionByConnectionName("STATUS");
+//
+//        Connection *connectionPtr;
+//        connectionPtr = this->getConnectionPtrByConnectionName("CAMERA");
+//        if (connectionPtr!= nullptr)
+//        {
+//            connectionPtr->terminateConnection();
+//            int optval = 1;
+//            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+//            close(connectionPtr->getFileDescriptor());
+//        }
+//        connectionPtr = this->getConnectionPtrByConnectionName("COMMANDS");
+//        if (connectionPtr!= nullptr)
+//        {
+//            connectionPtr->terminateConnection();
+//            int optval = 1;
+//            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+//            close(connectionPtr->getFileDescriptor());
+//        }
+//        connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
+//        if (connectionPtr!= nullptr)
+//        {
+//            connectionPtr->terminateConnection();
+//            int optval = 1;
+//            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+//            close(connectionPtr->getFileDescriptor());
+//        }
+//
+//        (this->existingConnections).erase (this->existingConnections.begin()+cameraPositionInVector);
+//        (this->existingConnections).erase (this->existingConnections.begin()+commandsPositionInVector);
+//        (this->existingConnections).erase (this->existingConnections.begin()+heartbeatPositionInVector);
+//        return;
+//    }
 
-        Connection *connectionPtr;
-        connectionPtr = this->getConnectionPtrByConnectionName("CAMERA");
-        if (connectionPtr!= nullptr)
-        {
-            connectionPtr->terminateConnection();
-            int optval = 1;
-            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
-            close(connectionPtr->getFileDescriptor());
-        }
-        connectionPtr = this->getConnectionPtrByConnectionName("COMMANDS");
-        if (connectionPtr!= nullptr)
-        {
-            connectionPtr->terminateConnection();
-            int optval = 1;
-            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
-            close(connectionPtr->getFileDescriptor());
-        }
-        connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
-        if (connectionPtr!= nullptr)
-        {
-            connectionPtr->terminateConnection();
-            int optval = 1;
-            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
-            close(connectionPtr->getFileDescriptor());
-        }
-
-        (this->existingConnections).erase (this->existingConnections.begin()+cameraPositionInVector);
-        (this->existingConnections).erase (this->existingConnections.begin()+commandsPositionInVector);
-        (this->existingConnections).erase (this->existingConnections.begin()+heartbeatPositionInVector);
-        return;
-    }
-
-    void NetworkManager::sendHeartBeat()
-    {
-        Connection *connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
-        if (connectionPtr!= nullptr)
-        {
-            VLOG(3) << "sending heartBeat";
-            char heartBeatBuffer[1] = {'h'};
-            int bytesSent = send(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
-        }
-        return;
-    }
-
-    ConnectionStatus NetworkManager::checkConnectionStatus()
-    {
-        Connection *connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
-        if (connectionPtr!= nullptr)
-        {
-            int heartBeatReceived = 0;
-            char heartBeatBuffer[1];
-            ConnectionStatus connectionStatus = ConnectionStatus::NOT_CONNECTED;
-
-            do{
-                heartBeatReceived = 0;
-                heartBeatReceived = recv(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
-                VLOG(3) << "HeartBeat received: " << heartBeatReceived;
-                if(heartBeatReceived > 0)
-                {
-                    VLOG(3) << "received heartbeat";
-                    this->timeOfLastHeartBeatReceived = std::chrono::high_resolution_clock::now();
-                    connectionStatus = ConnectionStatus::CONNECTED;
-                }
-            }while(heartBeatReceived > 0);
-            return connectionStatus;
-        }
-        return ConnectionStatus::NOT_CONNECTED;
-    }
+//    void NetworkManager::sendHeartBeat()
+//    {
+//        Connection *connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
+//        if (connectionPtr!= nullptr)
+//        {
+//            VLOG(3) << "sending heartBeat";
+//            char heartBeatBuffer[1] = {'h'};
+//            int bytesSent = send(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
+//        }
+//        return;
+//    }
+//
+//    ConnectionStatus NetworkManager::checkConnectionStatus()
+//    {
+//        Connection *connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
+//        if (connectionPtr!= nullptr)
+//        {
+//            int heartBeatReceived = 0;
+//            char heartBeatBuffer[1];
+//            ConnectionStatus connectionStatus = ConnectionStatus::NOT_CONNECTED;
+//
+//            do{
+//                heartBeatReceived = 0;
+//                heartBeatReceived = recv(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
+//                VLOG(3) << "HeartBeat received: " << heartBeatReceived;
+//                if(heartBeatReceived > 0)
+//                {
+//                    VLOG(3) << "received heartbeat";
+//                    this->timeOfLastHeartBeatReceived = std::chrono::high_resolution_clock::now();
+//                    connectionStatus = ConnectionStatus::CONNECTED;
+//                }
+//            }while(heartBeatReceived > 0);
+//            return connectionStatus;
+//        }
+//        return ConnectionStatus::NOT_CONNECTED;
+//    }
 
     void NetworkManager::terminateConnection(std::string connectionName)
     {
@@ -987,16 +987,18 @@ namespace RVR
             case ConnectionProtocol::UDP:
 //                for (int i = 0; i < 16000; i++)
 //                {
-                do{
+//                do{
                     bytesSent = sendto(this->fileDescriptor, bitStream, length, 0, (struct sockaddr *) &this->socketRemote, slen);
-                    timesTried++;
+                    VLOG(2) << "sendto succeeded? " << bytesSent;
+                timesTried++;
+                    usleep(20000);
 //                }
-                }while(bytesSent == -1);
+//                }while(bytesSent == -1);
                 VLOG(3) <<"Tried to call sento function " << timesTried << " times";
 //                csvFile << timesTried << "\r\n";
 //                csvFile.close();
 
-                VLOG(3) << "Sending length: " << length;
+                VLOG(2) << "Sending length: " << length;
 
                 break;
         }
@@ -1022,7 +1024,7 @@ namespace RVR
                     break;
                 case ReceiveType::SEGMENT:
                 {
-                    VLOG(2) << "Received CbHeader or CbData SEGMENT";
+                    VLOG(3) << "Received CbHeader or CbData SEGMENT";
                     receivedChunk->setData(receivedChunk->getData() - (RECEIVE_HEADER_LENGTH + RECEIVE_TYPELENGTH_LENGTH));
                     delete receivedChunk; //should be data to delete filled in then turned into CBheader
                     break;
