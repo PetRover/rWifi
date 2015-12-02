@@ -11,7 +11,7 @@
 
 int receiveHeaderValue[] = {67};
 
-const char*  ROVER_IP = "192.168.1.222";
+const char*  ROVER_IP = "192.168.1.8";
 const char*  APP_IP = "192.168.1.6";
 
 namespace RVR
@@ -508,8 +508,7 @@ namespace RVR
                 switch (protocol)
                 {
                     case ConnectionProtocol::TCP:
-                        while(!(connectionPtr->initiateConnection())){
-                        }
+                        while(!(connectionPtr->initiateConnection()));
                         {
                             int flags = fcntl(connectionPtr->getFileDescriptor(), F_GETFL, 0);
                             flags |= O_NONBLOCK;
@@ -564,6 +563,32 @@ namespace RVR
         int commandsPositionInVector = this->getPositionByConnectionName("COMMANDS");
         int heartbeatPositionInVector = this->getPositionByConnectionName("STATUS");
 
+        Connection *connectionPtr;
+        connectionPtr = this->getConnectionPtrByConnectionName("CAMERA");
+        if (connectionPtr!= nullptr)
+        {
+            connectionPtr->terminateConnection();
+            int optval = 1;
+            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+            close(connectionPtr->getFileDescriptor());
+        }
+        connectionPtr = this->getConnectionPtrByConnectionName("COMMANDS");
+        if (connectionPtr!= nullptr)
+        {
+            connectionPtr->terminateConnection();
+            int optval = 1;
+            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+            close(connectionPtr->getFileDescriptor());
+        }
+        connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
+        if (connectionPtr!= nullptr)
+        {
+            connectionPtr->terminateConnection();
+            int optval = 1;
+            setsockopt(connectionPtr->getFileDescriptor(), SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+            close(connectionPtr->getFileDescriptor());
+        }
+
         (this->existingConnections).erase (this->existingConnections.begin()+cameraPositionInVector);
         (this->existingConnections).erase (this->existingConnections.begin()+commandsPositionInVector);
         (this->existingConnections).erase (this->existingConnections.begin()+heartbeatPositionInVector);
@@ -575,6 +600,7 @@ namespace RVR
         Connection *connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
         if (connectionPtr!= nullptr)
         {
+            VLOG(3) << "sending heartBeat";
             char heartBeatBuffer[1] = {'h'};
             int bytesSent = send(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
         }
@@ -590,15 +616,17 @@ namespace RVR
             char heartBeatBuffer[1];
             ConnectionStatus connectionStatus = ConnectionStatus::NOT_CONNECTED;
 
-            while (heartBeatReceived != -1)
-            {
+            do{
+                heartBeatReceived = 0;
                 heartBeatReceived = recv(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
-                if (heartBeatReceived != -1)
+                VLOG(3) << "HeartBeat received: " << heartBeatReceived;
+                if(heartBeatReceived > 0)
                 {
+                    VLOG(3) << "received heartbeat";
                     this->timeOfLastHeartBeatReceived = std::chrono::high_resolution_clock::now();
                     connectionStatus = ConnectionStatus::CONNECTED;
                 }
-            }
+            }while(heartBeatReceived > 0);
             return connectionStatus;
         }
         return ConnectionStatus::NOT_CONNECTED;
@@ -748,6 +776,7 @@ namespace RVR
         if (successStatus == -1)
         {
             VLOG(2) << "Failed to bind to socket";
+            perror("bindToSocket()");
             return 0;
         } else
         {
@@ -820,6 +849,7 @@ namespace RVR
         if (successStatus == -1)
         {
             VLOG(1) << "Failed to initiate connection";
+            perror("connect()");
             return 0;
         } else
         {
@@ -1152,9 +1182,7 @@ namespace RVR
                     VLOG(2) << "Chunk received-> DataType: CBDATA Length:" << length;
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
-                    VLOG(2) << "After create new CbData";
                     ChunkBox *chunkBox = this->chunkAccumulator[cbData->getUID()]; //determine which chunkbox it should be put in based on UID
-                    VLOG(2) << " After create new chunkbox";
                     if (chunkBox == nullptr)
                     {
                         VLOG(2) << "ChunkBox is nullptr. cbHeader not received";

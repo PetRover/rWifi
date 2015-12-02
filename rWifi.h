@@ -280,7 +280,7 @@ namespace RVR
         Connection* getConnectionPtrByConnectionName(std::string connectionNameToFind);
         int getPositionByConnectionName(std::string connectionNameToFind);
     public:
-        std::chrono::high_resolution_clock::time_point timeOfLastHeartBeatReceived;
+        std::chrono::high_resolution_clock::time_point timeOfLastHeartBeatReceived = std::chrono::high_resolution_clock::now();
         std::chrono::high_resolution_clock::time_point timeOfLastHeartBeatSent = std::chrono::high_resolution_clock::now();
         int initializeNewConnectionAndConnect(std::string connectionName, const char *ipAddressLocal, const char *ipAddressRemote, u_short port, ConnectionInitType initType, ConnectionProtocol protocol);
         void sendHeartBeat();
