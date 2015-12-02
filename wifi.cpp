@@ -556,7 +556,52 @@ namespace RVR
 
         }
         return 1;
+    }
 
+    void NetworkManager::removeConnections()
+    {
+        int cameraPositionInVector = this->getPositionByConnectionName("CAMERA");
+        int commandsPositionInVector = this->getPositionByConnectionName("COMMANDS");
+        int heartbeatPositionInVector = this->getPositionByConnectionName("STATUS");
+
+        (this->existingConnections).erase (this->existingConnections.begin()+cameraPositionInVector);
+        (this->existingConnections).erase (this->existingConnections.begin()+commandsPositionInVector);
+        (this->existingConnections).erase (this->existingConnections.begin()+heartbeatPositionInVector);
+        return;
+    }
+
+    void NetworkManager::sendHeartBeat()
+    {
+        Connection *connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
+        if (connectionPtr!= nullptr)
+        {
+            char heartBeatBuffer[1] = {'h'};
+            int bytesSent = send(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
+        }
+        return;
+    }
+
+    ConnectionStatus NetworkManager::checkConnectionStatus()
+    {
+        Connection *connectionPtr = this->getConnectionPtrByConnectionName("HEARTBEAT");
+        if (connectionPtr!= nullptr)
+        {
+            int heartBeatReceived = 0;
+            char heartBeatBuffer[1];
+            ConnectionStatus connectionStatus = ConnectionStatus::NOT_CONNECTED;
+
+            while (heartBeatReceived != -1)
+            {
+                heartBeatReceived = recv(connectionPtr->getFileDescriptor(), heartBeatBuffer, 1, 0);
+                if (heartBeatReceived != -1)
+                {
+                    this->timeOfLastHeartBeatReceived = std::chrono::high_resolution_clock::now();
+                    connectionStatus = ConnectionStatus::CONNECTED;
+                }
+            }
+            return connectionStatus;
+        }
+        return ConnectionStatus::NOT_CONNECTED;
     }
 
     void NetworkManager::terminateConnection(std::string connectionName)
