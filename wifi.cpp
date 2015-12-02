@@ -11,7 +11,7 @@
 
 int receiveHeaderValue[] = {67};
 
-const char*  ROVER_IP = "192.168.1.5";
+const char*  ROVER_IP = "192.168.1.222";
 const char*  APP_IP = "192.168.1.6";
 
 namespace RVR
@@ -985,15 +985,16 @@ namespace RVR
                 bytesSent = send(this->fileDescriptor, bitStream, length, 0);
                 break;
             case ConnectionProtocol::UDP:
-//                for (int i = 0; i < 16000; i++)
-//                {
-//                do{
-                    bytesSent = sendto(this->fileDescriptor, bitStream, length, 0, (struct sockaddr *) &this->socketRemote, slen);
-                    VLOG(2) << "sendto succeeded? " << bytesSent;
+                bytesSent = sendto(this->fileDescriptor, bitStream, length, 0, (struct sockaddr *) &this->socketRemote, slen);
+                VLOG(2) << "sendto succeeded? " << bytesSent;
                 timesTried++;
-                    usleep(20000);
+//                    usleep(20000); //THIS WORKS
+//                usleep(15000);//works awesome at about 4 frames per second
+//                usleep(11000); //best number for wired connection
+//                usleep(6000);//wifi 2-3 fps
+//                    usleep(10000);//works awesome at about 5 frames per second
+                //can't do 9000 - get 5-7 segments
 //                }
-//                }while(bytesSent == -1);
                 VLOG(3) <<"Tried to call sento function " << timesTried << " times";
 //                csvFile << timesTried << "\r\n";
 //                csvFile.close();
@@ -1181,7 +1182,7 @@ namespace RVR
                     break;
                 case DataType::CBDATA:
                 {
-                    VLOG(2) << "Chunk received-> DataType: CBDATA Length:" << length;
+                    VLOG(3) << "Chunk received-> DataType: CBDATA Length:" << length;
 
                     CbData *cbData = new CbData(receivedChunk); //make a new CbData and fill it in via NetworkChunk
                     ChunkBox *chunkBox = this->chunkAccumulator[cbData->getUID()]; //determine which chunkbox it should be put in based on UID
